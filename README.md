@@ -7,6 +7,11 @@
 
 Your [tokens.ci](https://tokens.ci) token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
 
+[![Release](https://img.shields.io/github/v/release/lucaisgrowing/tokens-menubar?style=flat-square)](https://github.com/lucaisgrowing/tokens-menubar/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square)
+![Universal](https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square)
+
 Single-file Swift, compiled straight with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
 ```
