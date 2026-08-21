@@ -22,6 +22,8 @@ struct Config {
     var apiRefreshSeconds: TimeInterval = 300
     var localRefreshSeconds: TimeInterval = 120
     var topModels = 5
+    /// Which rank the menu bar shows by default; the menu can override it.
+    var menuBarRank: RankMode = .allTime
 
     static let configPath = NSHomeDirectory() + "/.config/tokens-menubar/config.json"
     static let credentialsPath = NSHomeDirectory() + "/.config/tokens/credentials.json"
@@ -40,6 +42,7 @@ struct Config {
         if let v = (o["apiRefreshSeconds"] as? NSNumber)?.doubleValue, v >= 30 { cfg.apiRefreshSeconds = v }
         if let v = (o["localRefreshSeconds"] as? NSNumber)?.doubleValue, v >= 30 { cfg.localRefreshSeconds = v }
         if let v = (o["topModels"] as? NSNumber)?.intValue, v >= 0 { cfg.topModels = v }
+        if let v = o["menuBarRank"] as? String, let m = RankMode(rawValue: v) { cfg.menuBarRank = m }
         return cfg
     }
 
@@ -90,6 +93,13 @@ func pad(_ s: String, _ width: Int) -> String {
     return n >= width ? s : s + String(repeating: " ", count: width - n)
 }
 
+/// One layout for value rows, shared by the menu and `--dump`.
+func rowText(_ label: String, _ value: String, _ trailing: String?) -> String {
+    let v = pad(value, 11)
+    guard let trailing else { return label + "   " + v }
+    return label + "   " + v + (v.hasSuffix(" ") ? "" : " ") + trailing
+}
+
 func fmtClock(_ date: Date) -> String {
     let f = DateFormatter()
     f.dateFormat = "HH:mm"
@@ -111,19 +121,39 @@ struct Neighbour {
     let tokens: Int
 }
 
-struct ServerStats {
+/// Where the user sits on one leaderboard (all-time or today).
+struct BoardStanding {
+    /// 0 means "not on this board" — e.g. nothing submitted yet today.
     var rank: Int
     var totalUsers: Int
+    /// Own period total as this board reports it, so the gap uses one source.
+    var tokens: Int
+    var above: Neighbour?
+}
+
+enum RankMode: String {
+    case allTime = "all"
+    case today = "today"
+
+    var label: String { self == .today ? "今日榜" : "累计榜" }
+    /// Menu bar prefix — "今" disambiguates a daily rank from a lifetime one.
+    var badge: String { self == .today ? "今#" : "#" }
+}
+
+struct ServerStats {
+    var rank: Int
     var totalTokens: Int
     var totalCost: Double
     var activeDays: Int
     var updatedAt: Date?
     var isStale: Bool
     var models: [ModelSlice]
-    /// The user directly above on the leaderboard, when resolvable.
-    var above: Neighbour?
-    /// Own total as the leaderboard reports it, so the gap is computed from one source.
-    var leaderboardTokens: Int?
+    var allTime: BoardStanding?
+    var today: BoardStanding?
+
+    func standing(_ mode: RankMode) -> BoardStanding? {
+        mode == .today ? today : allTime
+    }
 }
 
 struct LocalStats {
@@ -233,8 +263,8 @@ final class API {
         }.resume()
     }
 
-    /// Fetches the profile, then the leaderboard page containing the user so the
-    /// gap to the next rank can be shown. Calls back on `queue` (main by default).
+    /// Fetches the profile plus both leaderboards (all-time and today) so either
+    /// rank can be shown. Calls back on `queue` (main by default).
     func fetch(on queue: DispatchQueue = .main, _ done: @escaping (ServerStats?) -> Void) {
         let user = config.username
         guard !user.isEmpty,
@@ -253,41 +283,60 @@ final class API {
             }
             var stats = ServerStats(
                 rank: int(u, "rank"),
-                totalUsers: 0,
                 totalTokens: int(s, "totalTokens"),
                 totalCost: dbl(s, "totalCost"),
                 activeDays: int(s, "activeDays"),
                 updatedAt: parseDate(o["updatedAt"]) ?? parseDate(fresh?["lastUpdated"]),
                 isStale: (fresh?["isStale"] as? Bool) ?? false,
                 models: models,
-                above: nil,
-                leaderboardTokens: nil)
+                allTime: nil,
+                today: nil)
 
-            self.fetchNeighbours(rank: stats.rank, username: user) { totalUsers, above, mine in
-                stats.totalUsers = totalUsers
-                stats.above = above
-                stats.leaderboardTokens = mine
-                queue.async { done(stats) }
+            // `/api/users/<name>?period=today` ignores the period (it echoes
+            // "all"), so a daily rank has to come from the daily board itself.
+            let group = DispatchGroup()
+            group.enter()
+            self.findOnBoard(period: "all", username: user, fromPage: 1) {
+                stats.allTime = $0
+                group.leave()
             }
+            group.enter()
+            self.findOnBoard(period: "today", username: user, fromPage: 1) {
+                stats.today = $0
+                group.leave()
+            }
+            group.notify(queue: queue) { done(stats) }
         }
     }
 
-    private func fetchNeighbours(rank: Int, username: String,
-                                 _ done: @escaping (Int, Neighbour?, Int?) -> Void) {
-        guard rank > 0 else { return done(0, nil, nil) }
-        let limit = 20
-        let page = max(1, (rank + limit - 1) / limit)
-        getJSON("/api/leaderboard?limit=\(limit)&page=\(page)") { o in
-            guard let o else { return done(0, nil, nil) }
-            let total = int(o["pagination"] as? [String: Any], "totalUsers")
+    /// Walks leaderboard pages until the user turns up, so both the rank and the
+    /// entry directly above it come from the same ordered list.
+    private func findOnBoard(period: String, username: String, fromPage page: Int,
+                             maxPages: Int = 6,
+                             _ done: @escaping (BoardStanding?) -> Void) {
+        getJSON("/api/leaderboard?period=\(period)&limit=100&page=\(page)") { [weak self] o in
+            guard let o else { return done(nil) }
+            let pg = o["pagination"] as? [String: Any]
+            let totalUsers = int(pg, "totalUsers")
             let users = (o["users"] as? [[String: Any]] ?? []).map {
                 Neighbour(rank: int($0, "rank"),
                           username: $0["username"] as? String ?? "?",
                           tokens: int($0, "totalTokens"))
             }
-            let mine = users.first { $0.username == username }?.tokens
-            let above = users.first { $0.rank == rank - 1 }
-            done(total, above, mine)
+            if let i = users.firstIndex(where: { $0.username == username }) {
+                return done(BoardStanding(rank: users[i].rank,
+                                          totalUsers: totalUsers,
+                                          tokens: users[i].tokens,
+                                          above: i > 0 ? users[i - 1] : nil))
+            }
+            let hasNext = (pg?["hasNext"] as? Bool) ?? false
+            if let self, hasNext, page < maxPages {
+                self.findOnBoard(period: period, username: username,
+                                 fromPage: page + 1, maxPages: maxPages, done)
+            } else {
+                // Absent from this board: rank 0 renders as 未上榜.
+                done(BoardStanding(rank: 0, totalUsers: totalUsers, tokens: 0, above: nil))
+            }
         }
     }
 }
@@ -353,6 +402,7 @@ enum Line {
 
 struct Presenter {
     let config: Config
+    let rankMode: RankMode
     let server: ServerStats?
     let local: LocalStats
     let serverFailed: Bool
@@ -360,25 +410,54 @@ struct Presenter {
 
     var title: String {
         var parts = [local.failed ? "—" : fmtTokens(local.todayTokens)]
-        if let s = server, s.rank > 0 { parts.append("#\(s.rank)") }
-        else if serverFailed { parts.append("#?") }
+        if let st = server?.standing(rankMode) {
+            parts.append(st.rank > 0 ? "\(rankMode.badge)\(st.rank)" : "\(rankMode.badge)—")
+        } else if serverFailed {
+            parts.append("#?")
+        }
         return parts.joined(separator: "  ")
     }
 
     var tooltip: String {
-        local.failed ? "找不到 tokens CLI 或本地扫描失败"
-                     : "今日 \(fmtExact(local.todayTokens)) tokens"
+        var bits = [local.failed ? "找不到 tokens CLI 或本地扫描失败"
+                                 : "今日 \(fmtExact(local.todayTokens)) tokens"]
+        if let s = server {
+            if let a = s.allTime, a.rank > 0 { bits.append("累计榜 第 \(a.rank) / \(a.totalUsers) 名") }
+            if let t = s.today { bits.append(t.rank > 0 ? "今日榜 第 \(t.rank) / \(t.totalUsers) 名"
+                                                       : "今日榜 未上榜") }
+        }
+        return bits.joined(separator: "\n")
+    }
+
+    private func standingRow(_ mode: RankMode) -> Line? {
+        guard let st = server?.standing(mode) else { return nil }
+        let value = st.rank > 0 ? "#\(st.rank) / \(st.totalUsers)" : "未上榜"
+        return .row(mode.label, value, mode == rankMode ? "· 菜单栏" : nil)
+    }
+
+    private var gapLine: Line? {
+        guard let st = server?.standing(rankMode) else { return nil }
+        if st.rank == 0 {
+            return .note("\(rankMode.label) 未上榜 —— 今天还没有提交记录")
+        }
+        guard let above = st.above else {
+            return st.rank == 1 ? .note("\(rankMode.label) 已经是第 1 名") : nil
+        }
+        let gap = max(0, above.tokens - st.tokens)
+        return .note("\(rankMode.label) 距 #\(above.rank) @\(above.username) 还差 \(fmtTokens(gap))")
     }
 
     var lines: [Line] {
         var out: [Line] = []
-        let name = config.username.isEmpty ? "未登录" : "@" + config.username
-        if let s = server, s.rank > 0 {
-            out.append(.header("#\(s.rank)\(s.totalUsers > 0 ? " / \(s.totalUsers)" : "")  ·  \(name)"))
-        } else {
-            out.append(.header(name))
-        }
+        out.append(.header(config.username.isEmpty ? "未登录" : "@" + config.username))
         out.append(.separator)
+
+        if server != nil {
+            if let l = standingRow(.allTime) { out.append(l) }
+            if let l = standingRow(.today) { out.append(l) }
+            out.append(.note("#名次 / 榜上总人数；今日榜只算当天提交过的人"))
+            out.append(.separator)
+        }
 
         if let s = server {
             out.append(.row("累计", fmtTokens(s.totalTokens), fmtMoney(s.totalCost)))
@@ -395,10 +474,9 @@ struct Presenter {
             out.append(.row("本周", fmtTokens(local.weekTokens), fmtMoney(local.weekCost)))
         }
 
-        if let s = server, let above = s.above {
-            let gap = max(0, above.tokens - (s.leaderboardTokens ?? s.totalTokens))
+        if let l = gapLine {
             out.append(.separator)
-            out.append(.note("距 #\(above.rank) @\(above.username) 还差 \(fmtTokens(gap))"))
+            out.append(l)
         }
 
         if config.topModels > 0, let s = server, !s.models.isEmpty {
@@ -436,6 +514,7 @@ final class Controller: NSObject, NSMenuDelegate {
     private var server: ServerStats?
     private var local = LocalStats()
     private var serverFailed = false
+    private var rankMode: RankMode = .allTime
     private var transient: String?
     private var busy = false
     private var lastServerFetch: Date?
@@ -445,6 +524,15 @@ final class Controller: NSObject, NSMenuDelegate {
 
     private let monoFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
     private let rowFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+
+    /// config.json sets the default; flipping it in the menu wins from then on.
+    private static let rankModeKey = "menuBarRank"
+
+    override init() {
+        super.init()
+        let stored = UserDefaults.standard.string(forKey: Controller.rankModeKey)
+        rankMode = stored.flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
+    }
 
     func start() {
         if let button = statusItem.button {
@@ -500,7 +588,7 @@ final class Controller: NSObject, NSMenuDelegate {
     // MARK: Rendering
 
     private var presenter: Presenter {
-        Presenter(config: config, server: server, local: local,
+        Presenter(config: config, rankMode: rankMode, server: server, local: local,
                   serverFailed: serverFailed, transient: transient)
     }
 
@@ -532,8 +620,7 @@ final class Controller: NSObject, NSMenuDelegate {
             it.target = self
             return it
         case .row(let label, let value, let trailing):
-            let text = "\(label)   \(pad(value, 10))\(trailing ?? "")"
-            return disabledItem(text, font: rowFont, dim: false)
+            return disabledItem(rowText(label, value, trailing), font: rowFont, dim: false)
         case .note(let text):
             return disabledItem(text, font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), dim: true)
         case .small(let text):
@@ -571,6 +658,8 @@ final class Controller: NSObject, NSMenuDelegate {
         refresh.target = self
         menu.addItem(refresh)
 
+        menu.addItem(rankModeItem())
+
         let profile = NSMenuItem(title: "打开 tokens.ci 主页", action: #selector(openProfile), keyEquivalent: "o")
         profile.target = self
         menu.addItem(profile)
@@ -586,7 +675,40 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(quit)
     }
 
+    /// Submenu picking which rank the menu bar shows, with the live numbers
+    /// inline so the choice is obvious.
+    private func rankModeItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: "菜单栏显示排名", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        for mode in [RankMode.allTime, .today] {
+            let st = server?.standing(mode)
+            let detail: String
+            if let st { detail = st.rank > 0 ? "  #\(st.rank) / \(st.totalUsers)" : "  未上榜" }
+            else { detail = "" }
+            let it = NSMenuItem(title: mode.label + detail,
+                                action: #selector(setRankMode(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = mode.rawValue
+            it.state = mode == rankMode ? .on : .off
+            sub.addItem(it)
+        }
+        sub.addItem(.separator())
+        sub.addItem(disabledItem("累计榜 = 历史总量排名", font: rowFont, dim: true))
+        sub.addItem(disabledItem("今日榜 = 只算当天提交量的排名", font: rowFont, dim: true))
+        parent.submenu = sub
+        return parent
+    }
+
+    @objc private func setRankMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = RankMode(rawValue: raw) else { return }
+        rankMode = mode
+        UserDefaults.standard.set(raw, forKey: Controller.rankModeKey)
+        render()
+    }
+
     // MARK: Actions
+
 
     @objc private func refreshAll() {
         refreshLocal()
@@ -657,14 +779,16 @@ func runDump() -> Never {
     api.fetch(on: .global()) { s in server = s; sema.signal() }
     if sema.wait(timeout: .now() + 45) == .timedOut { print("api: TIMEOUT") }
 
-    let p = Presenter(config: config, server: server, local: local,
+    let mode = UserDefaults.standard.string(forKey: "menuBarRank")
+        .flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
+    let p = Presenter(config: config, rankMode: mode, server: server, local: local,
                       serverFailed: server == nil, transient: nil)
-    print("\nmenu bar:  ⚡ \(p.title)\n")
+    print("\nmenu bar:  ⚡ \(p.title)   (rank mode: \(mode.rawValue))\n")
     for line in p.lines {
         switch line {
         case .separator: print("  " + String(repeating: "─", count: 42))
         case .header(let t): print("  " + t)
-        case .row(let l, let v, let tr): print("  \(l)   \(pad(v, 10))\(tr ?? "")")
+        case .row(let l, let v, let tr): print("  " + rowText(l, v, tr))
         case .note(let t), .small(let t): print("  " + t)
         }
     }
