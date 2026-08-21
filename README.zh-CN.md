@@ -81,6 +81,8 @@ open TokensBar.app
 
 app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
+图标是 `Resources/AppIcon.icns`，已经提交进仓库。它是用代码画的 —— 改 `Tools/make-icon.swift` 然后跑 `swift Tools/make-icon.swift` 重新生成。
+
 ## 配置
 
 可选，`~/.config/tokens-menubar/config.json`：

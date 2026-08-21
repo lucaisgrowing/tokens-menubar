@@ -43,11 +43,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.name }}
         run: |
+          # Fixed install instructions first, then the generated changelog, so
+          # every release keeps the quarantine note without hand-editing.
+          cp .github/release-notes.md notes.md
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$TAG" --jq .body >> notes.md || true
+          shasum -a 256 TokensBar.app.zip | awk '{print "\n```\nSHA-256  " $1 "\n```"}' >> notes.md
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" TokensBar.app.zip --clobber
+            gh release edit "$TAG" --notes-file notes.md
           else
             gh release create "$TAG" \
               --title "TokensBar $TAG" \
-              --generate-notes \
+              --notes-file notes.md \
               TokensBar.app.zip
           fi

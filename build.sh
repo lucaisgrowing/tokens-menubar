@@ -18,6 +18,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$DIR/Info.plist" "$APP/Contents/Info.plist"
 
+# Icon is committed; regenerate with `swift Tools/make-icon.swift` after edits.
+if [[ -f "$DIR/Resources/AppIcon.icns" ]]; then
+  cp "$DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+else
+  echo "warn: Resources/AppIcon.icns missing, app will have no icon"
+fi
+
 compile() { # $1 = arch, $2 = output path
   swiftc -O -swift-version 5 \
     -target "$1-apple-macos$DEPLOY_TARGET" \

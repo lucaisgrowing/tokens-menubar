@@ -83,6 +83,8 @@ open TokensBar.app
 
 The app is an `LSUIElement`: menu bar only, no Dock icon and no windows.
 
+The icon lives at `Resources/AppIcon.icns` and is committed. It is drawn in code — edit `Tools/make-icon.swift` and run `swift Tools/make-icon.swift` to regenerate it.
+
 ## Configuration
 
 Optional, `~/.config/tokens-menubar/config.json`:
