@@ -1,70 +1,85 @@
+<div align="right">
+  <a href="README.md"><img src="https://img.shields.io/badge/English-1f6feb?style=for-the-badge&logoColor=white" alt="English"></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/简体中文-6e7681?style=for-the-badge&logoColor=white" alt="简体中文"></a>
+</div>
+
 # TokensBar
 
-在 macOS 菜单栏上看 [tokens.ci](https://tokens.ci) 的 token 用量和排名，不用再开网页。
+Your [tokens.ci](https://tokens.ci) token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
 
-单文件 Swift，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
+Single-file Swift, compiled straight with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
 ```
-菜单栏:  ⚡ 12.4M  #87       ← 累计榜名次
-  或:    ⚡ 12.4M  今#31     ← 当日榜名次
+menu bar:  ⚡ 12.4M  #87       ← all-time rank
+     or:   ⚡ 12.4M  今#31     ← today's rank
 
-下拉:
+dropdown:
   @your-handle
   ──────────────────────────────
-  累计榜   #87 / 265  · 菜单栏
-  今日榜   #31 / 121
-  #名次 / 榜上总人数；今日榜只算当天提交过的人
+  累计榜   #87 / 265  · 菜单栏     (all-time board)
+  今日榜   #31 / 121               (today's board)
+  #rank / people on the board
   ──────────────────────────────
-  累计   1.82B      $3,410.55
-  今日   12.4M      $54.30
-  本周   210.6M     $612.40
+  累计   1.82B      $3,410.55     (lifetime)
+  今日   12.4M      $54.30        (today)
+  本周   210.6M     $612.40       (this week)
   ──────────────────────────────
-  累计榜 距 #86 @someone-ahead 还差 24.3M
+  累计榜 距 #86 @someone-ahead 还差 24.3M   (gap to the rank above)
   ──────────────────────────────
   claude-opus-4-8          33.6%  1.36B
   gpt-5.6-sol              28.1%  1.13B
   glm-4.5-flash            14.1%  568.2M
-  claude-opus-4-6           5.3%  215.3M
-  claude-opus-4-7           4.3%  174.8M
   ──────────────────────────────
-  本地 12:21  ·  服务端 12:06
-  立即提交 / 刷新 / 菜单栏显示排名 / 打开主页 / 开机启动 / 退出
+  本地 12:21  ·  服务端 12:06    (local scan / server data timestamps)
+  submit now / refresh / rank shown in menu bar / open profile / launch at login / quit
 ```
 
-## 两个排名
+The interface is currently Chinese-only. Localisation is welcome — every string lives in the `Presenter` type in [`Sources/main.swift`](Sources/main.swift).
 
-- **累计榜** —— 历史总量的排名，也就是 tokens.ci 首页那个榜
-- **今日榜** —— 只按当天提交量排，榜上只有当天提交过的人，所以人数少、名次跳动大
+## The two ranks
 
-`#87 / 265` 读作「第 87 名 / 榜上共 265 人」，**不是两个不同的排名**。当日名次在菜单栏里前面带个「今」字（`今#31`），免得跟累计名次看混。
+- **累计榜 (all-time)** — ranked by lifetime tokens. This is the board on the tokens.ci front page.
+- **今日榜 (today)** — ranked by tokens submitted today only. Just the people who submitted today are on it, so it is a smaller board and the rank moves a lot.
 
-菜单栏显示哪一个，用下拉里的「菜单栏显示排名」随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在下拉里始终都列出来，切换只影响菜单栏那一行和差距提示看的是哪个榜。
+`#87 / 265` reads "rank 87 out of 265 people on the board" — it is **one** rank, not two different ones. In the menu bar a daily rank is prefixed with 今 (`今#31`) so it cannot be mistaken for a lifetime one.
 
-## 前提
+Pick which one the menu bar shows from the "菜单栏显示排名" submenu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always listed in the dropdown; the setting only changes the menu bar line and which board the gap line refers to.
 
-需要先装好并登录 [`tokens`](https://github.com/missuo/tokens) CLI：
+## Requirements
+
+The [`tokens`](https://github.com/missuo/tokens) CLI, installed and logged in:
 
 ```bash
 brew install owo-network/brew/tokens
 tokens login
 ```
 
-## 安装
+## Install
+
+Download `TokensBar.app.zip` from [Releases](https://github.com/lucaisgrowing/tokens-menubar/releases), unzip, move it to `/Applications`, then clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/TokensBar.app
+open /Applications/TokensBar.app
+```
+
+The build is ad-hoc signed and **not** notarised, so macOS will refuse to open it until the quarantine attribute is gone. Alternatively, right-click → Open, or allow it in System Settings → Privacy & Security. The release binary is universal (arm64 + x86_64) and needs macOS 13 or newer.
+
+Or build it yourself — nothing but the Swift toolchain that ships with Xcode is required:
 
 ```bash
 git clone https://github.com/lucaisgrowing/tokens-menubar.git
 cd tokens-menubar
-./build.sh
+./build.sh              # this Mac's architecture
+./build.sh --universal  # arm64 + x86_64
 open TokensBar.app
 ```
 
-编出来的是 ad-hoc 签名的未公证 app。第一次打开若被 Gatekeeper 拦，在「系统设置 → 隐私与安全性」里点「仍要打开」，或者 `xattr -dr com.apple.quarantine TokensBar.app`。
+The app is an `LSUIElement`: menu bar only, no Dock icon and no windows.
 
-app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
+## Configuration
 
-## 配置
-
-可选，`~/.config/tokens-menubar/config.json`：
+Optional, `~/.config/tokens-menubar/config.json`:
 
 ```json
 {
@@ -76,63 +91,61 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 }
 ```
 
-| 键 | 默认 | 说明 |
+| Key | Default | Meaning |
 | --- | --- | --- |
-| `username` | 读 `~/.config/tokens/credentials.json` | tokens.ci 用户名 |
-| `apiBase` | `https://tokens.ci` | API 地址 |
-| `menuBarRank` | `all` | 菜单栏默认显示哪个排名：`all` 累计榜 / `today` 当日榜 |
-| `apiRefreshSeconds` | 300 | 拉服务端数据的间隔（最小 30） |
-| `localRefreshSeconds` | 120 | 跑本地扫描的间隔（最小 30） |
-| `topModels` | 5 | 下拉里列几个模型，0 = 不列 |
+| `username` | read from `~/.config/tokens/credentials.json` | tokens.ci username |
+| `apiBase` | `https://tokens.ci` | API base URL |
+| `menuBarRank` | `all` | Which rank the menu bar shows: `all` (lifetime) or `today` |
+| `apiRefreshSeconds` | 300 | How often to hit the API (minimum 30) |
+| `localRefreshSeconds` | 120 | How often to run the local scan (minimum 30) |
+| `topModels` | 5 | Models listed in the dropdown, 0 to list none |
 
-在菜单里切过「菜单栏显示排名」之后，记住的选择（`UserDefaults`）优先于 `menuBarRank`。想让 config.json 重新生效：`defaults delete ci.tokens.menubar menuBarRank`。
+Once you switch the rank from the menu, that remembered choice (`UserDefaults`) wins over `menuBarRank`. To hand control back to the config file: `defaults delete ci.tokens.menubar menuBarRank`.
 
-## 命令行
+## Command line
 
 ```bash
-# 把菜单栏那行和整个下拉内容打到终端，用来排查数据链路
+# Print the menu bar line and the whole dropdown to stdout — useful for
+# checking the data path (CLI discovery, network, parsing) without the GUI.
 ./TokensBar.app/Contents/MacOS/TokensBar --dump
 
-# 开机启动（装/卸 ~/Library/LaunchAgents/ci.tokens.menubar.plist）
+# Launch at login (installs/removes ~/Library/LaunchAgents/ci.tokens.menubar.plist)
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login on
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login off
 ```
 
-菜单里的「开机启动」勾选项做的是同一件事。
+The "开机启动" checkbox in the menu does the same thing as `--set-login`.
 
-## 工作原理
+## How it works
 
-两个数据源混着用：
+Two data sources, mixed:
 
-- **排名、累计、模型占比** —— tokens.ci 的公开只读接口 `GET /api/users/<name>` 和 `GET /api/leaderboard?period=all|today&limit=100&page=N`。两个榜各翻页翻到自己那条为止，名次、榜上人数和上一名都从同一个有序列表里取，所以差距是自洽的。
-- **今日、本周** —— 本地跑 `tokens --today --json` / `tokens --week --json`。服务端只有已提交的数据（`tokens serve` 默认 30 分钟一轮），本地扫描才是实时的，而且这两条各只要约 1 秒。
+- **Ranks, lifetime totals, model split** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today&limit=100&page=N`. Both boards are paged through until your own entry turns up, so the rank, the board size and the entry above all come from one ordered list and the gap is self-consistent. No credentials are sent.
+- **Today and this week** — the local CLI, `tokens --today --json` and `tokens --week --json`. The server only knows what has been submitted (`tokens serve` submits every 30 minutes by default); the local scan is live, and each of these takes about a second.
 
-几个容易算错的地方，实现里已经处理：
+Details that are easy to get wrong, handled here:
 
 - `totalTokens = input + output + cacheRead + cacheWrite + reasoning`
-- `tokens --json` 顶层没有 `totalReasoning`，reasoning 得从 `entries[].reasoning` 自己加
-- API `modelUsage[].percentage` 是**花费**占比不是 token 占比（便宜模型会显示 0.0% 却吃掉两位数百分比的 token），所以下拉里的百分比是本地按 token 重算的
-- `GET /api/users/<name>?period=today` **不生效**，它照样回 `"period": "all"`，所以当日名次只能从当日榜列表里捞
-- 下拉里的「今日」（本地扫描，仅本机）和当日榜的名次（服务端，多设备累加）不是同一个数，多台机器共用一个账号时前者会偏小
-- GUI app 不继承 shell 的 `PATH`，`tokens` 二进制按 `/usr/local/bin` → `/opt/homebrew/bin` → `~/.cargo/bin` → `/usr/bin` 逐个探
+- `tokens --json` has no top-level `totalReasoning` — reasoning has to be summed from `entries[].reasoning`
+- `modelUsage[].percentage` from the API is a share of **cost**, not tokens (a cheap model can show 0.0% while eating a double-digit share of tokens), so the dropdown recomputes token share locally
+- `GET /api/users/<name>?period=today` **does not work** — it echoes `"period": "all"` regardless, so a daily rank has to come from the daily board listing
+- The dropdown's 今日 (local scan, this machine only) and the daily board rank (server-side, all your devices summed) are not the same number; with several machines on one account the local figure reads low
+- GUI apps do not inherit the shell `PATH`, so the `tokens` binary is probed at `/usr/local/bin` → `/opt/homebrew/bin` → `~/.cargo/bin` → `/usr/bin`
 
-如果 tokens.ci 走代理才通，注意它在 Cloudflare 后面：共享出口 IP 可能触发 managed challenge，此时接口会返回 403 的挑战页而不是 JSON，菜单里会显示成「服务端读取失败」。
+If tokens.ci only works for you through a proxy, note that it sits behind Cloudflare: a shared exit IP can trigger a managed challenge, in which case the endpoints return a 403 challenge page instead of JSON and the dropdown shows 服务端读取失败 (server read failed).
 
-## 引用与致谢
+## Credits
 
-本项目只是给下面这些项目做了个菜单栏前端，核心的用量统计工作都是它们做的：
+TokensBar is only a menu bar front end. All the actual usage accounting is done by:
 
-- [missuo/tokens](https://github.com/missuo/tokens) —— 本项目调用的 `tokens` CLI，以及 [tokens.ci](https://tokens.ci) 排行榜本身（MIT）
-- [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale) —— `missuo/tokens` 的上游（MIT）
+- [missuo/tokens](https://github.com/missuo/tokens) — the `tokens` CLI this app calls, and the [tokens.ci](https://tokens.ci) leaderboard itself (MIT)
+- [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale) — upstream of `missuo/tokens` (MIT)
 
-TokensBar 没有复制上述项目的任何代码，只通过它们的 CLI 输出和公开只读 API 取数。与 tokens.ci 官方无隶属关系。
+No code from either project is copied here; TokensBar only reads their CLI output and public read-only API. Not affiliated with tokens.ci.
 
-## 协议
+## License
 
-[MIT](LICENSE)，与上游两个项目保持一致。
+[MIT](LICENSE), matching both upstream projects.
 
----
-
-**English:** TokensBar is a tiny macOS menu bar app that shows your [tokens.ci](https://tokens.ci) AI coding token usage — today's tokens plus your leaderboard rank in the menu bar, with lifetime totals, weekly usage, the gap to the next rank, and a per-model token split in the dropdown. Both the all-time and the daily rank are always listed; pick which one the menu bar shows from the dropdown (or set `menuBarRank` in the config). `#87 / 265` means rank 87 out of 265 people on the board — it is one rank, not two. Single-file Swift, built with `swiftc` via `./build.sh`, no dependencies beyond system frameworks. Requires the [`tokens`](https://github.com/missuo/tokens) CLI to be installed and logged in. MIT licensed; credits to [missuo/tokens](https://github.com/missuo/tokens) and [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale).
 
 
