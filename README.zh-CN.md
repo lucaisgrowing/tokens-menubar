@@ -3,6 +3,10 @@
   <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/简体中文-1f6feb?style=for-the-badge&logoColor=white" alt="简体中文"></a>
 </div>
 
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="TokensBar icon">
+</p>
+
 # TokensBar
 
 在 macOS 菜单栏上看 [tokens.ci](https://tokens.ci) 的 token 用量和排名，不用再开网页。
@@ -52,6 +56,11 @@
 - **今日**用本地 CLI 扫描的结果，所以是实时的，不用等下一次提交
 
 前 7 个模型各占一块，剩下的折进「其他」。数据刷新时面板会原地更新，不用重新打开。
+
+<p align="center">
+  <img src="docs/chart-lifetime.png" width="380" alt="累计模型分布（按 token）">
+  <img src="docs/chart-today-cost.png" width="380" alt="今日模型分布（按费用）">
+</p>
 
 ## 两个排名
 

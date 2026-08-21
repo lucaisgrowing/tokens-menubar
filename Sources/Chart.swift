@@ -279,6 +279,8 @@ final class ChartPopover: NSObject {
 
     /// Renders the popover's own content offscreen, so `--chart-png` shows the
     /// real layout (heading and toggle included) rather than the chart alone.
+    /// The content is hosted in an offscreen window: NSControls only draw
+    /// properly inside one, and it also gets the display's native pixel density.
     func snapshot(scope: ChartScope, data: [ChartDatum], metric: ChartMetric) -> Data? {
         self.scope = scope
         self.data = data
@@ -288,10 +290,20 @@ final class ChartPopover: NSObject {
         toggle.selectedSegment = metric == .cost ? 1 : 0
         reload()
         guard let view = popover.contentViewController?.view else { return nil }
-        view.frame = NSRect(x: 0, y: 0, width: width, height: headerHeight + chart.fittingHeight)
+        let size = NSSize(width: width, height: headerHeight + chart.fittingHeight)
+
+        let host = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                            styleMask: [.borderless], backing: .buffered, defer: false)
+        host.isReleasedWhenClosed = false
+        host.contentView = view
+        view.frame = NSRect(origin: .zero, size: size)
         view.layoutSubtreeIfNeeded()
+        view.display()
+
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
+        host.contentView = nil // hand the view back to the popover
+        popover.contentViewController?.view = view
         return rep.representation(using: .png, properties: [:])
     }
 }

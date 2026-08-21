@@ -3,6 +3,10 @@
   <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/简体中文-6e7681?style=for-the-badge&logoColor=white" alt="简体中文"></a>
 </div>
 
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="TokensBar icon">
+</p>
+
 # TokensBar
 
 Your [tokens.ci](https://tokens.ci) token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
@@ -52,6 +56,11 @@ Clicking the **Lifetime** or **Today** row opens a popover under the menu bar ic
 - **Today** comes from the local CLI scan, so it is live rather than waiting on the next submission
 
 The top seven models get their own slice and the rest are folded into "Others". The popover refreshes in place as new data arrives.
+
+<p align="center">
+  <img src="docs/chart-lifetime.png" width="380" alt="Lifetime model distribution by tokens">
+  <img src="docs/chart-today-cost.png" width="380" alt="Today's model distribution by cost">
+</p>
 
 ## The two ranks
 
