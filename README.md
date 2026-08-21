@@ -19,31 +19,13 @@ Your [tokens.ci](https://tokens.ci) token usage and leaderboard rank, in the mac
 
 Single-file Swift, compiled straight with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
+<p align="center">
+  <img src="docs/menu.png" width="460" alt="The TokensBar dropdown">
+</p>
+
 ```
 menu bar:  ⚡ 12.4M  #87       ← all-time rank
      or:   ⚡ 12.4M  D#31      ← today's rank
-
-dropdown:
-  @your-handle
-  ──────────────────────────────
-  All-time   #87 / 265  · menu bar
-  Today      #31 / 121
-  #rank / people on the board; today counts only today's submitters
-  ──────────────────────────────
-  Lifetime   1.82B      $3,410.55     ← click for the donut chart
-  Today      12.4M      $54.30        ← click for the donut chart
-  This week  210.6M     $612.40
-  Click a row above for the model breakdown
-  ──────────────────────────────
-  All-time · 24.3M behind #86 @someone-ahead
-  ──────────────────────────────
-  claude-opus-4-8          33.6%  1.36B
-  gpt-5.6-sol              28.1%  1.13B
-  glm-4.5-flash            14.1%  568.2M
-  ──────────────────────────────
-  local 12:21  ·  server 12:06
-  Submit Now · Refresh · Rank Shown in Menu Bar · Language
-  Open tokens.ci Profile · Check for Updates… · Launch at Login · Quit
 ```
 
 English and 简体中文 are both built in — switch from the Language submenu (English is the default), or set `language` in the config file.
@@ -58,8 +40,8 @@ Clicking the **Lifetime** or **Today** row opens a popover under the menu bar ic
 The top seven models get their own slice and the rest are folded into "Others". The popover refreshes in place as new data arrives.
 
 <p align="center">
-  <img src="docs/chart-lifetime.png" width="380" alt="Lifetime model distribution by tokens">
-  <img src="docs/chart-today-cost.png" width="380" alt="Today's model distribution by cost">
+  <img src="docs/chart-today-tokens.png" width="360" alt="Today's model distribution by tokens">
+  <img src="docs/chart-lifetime-cost.png" width="360" alt="Lifetime model distribution by cost">
 </p>
 
 ## The two ranks

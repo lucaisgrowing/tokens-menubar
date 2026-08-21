@@ -19,31 +19,13 @@
 
 单文件 Swift，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
+<p align="center">
+  <img src="docs/menu.png" width="460" alt="TokensBar 下拉菜单">
+</p>
+
 ```
 菜单栏:  ⚡ 12.4M  #87       ← 累计榜名次
   或:    ⚡ 12.4M  今#31     ← 当日榜名次
-
-下拉:
-  @your-handle
-  ──────────────────────────────
-  累计榜     #87 / 265  · 菜单栏
-  今日榜     #31 / 121
-  #名次 / 榜上总人数；今日榜只算当天提交过的人
-  ──────────────────────────────
-  累计       1.82B      $3,410.55    ← 点开看饼图
-  今日       12.4M      $54.30       ← 点开看饼图
-  本周       210.6M     $612.40
-  点上面任意一行看模型分布
-  ──────────────────────────────
-  累计榜 距 #86 @someone-ahead 还差 24.3M
-  ──────────────────────────────
-  claude-opus-4-8          33.6%  1.36B
-  gpt-5.6-sol              28.1%  1.13B
-  glm-4.5-flash            14.1%  568.2M
-  ──────────────────────────────
-  本地 12:21  ·  服务端 12:06
-  立即提交 · 刷新 · 菜单栏显示排名 · 语言
-  打开 tokens.ci 主页 · 检查更新 · 开机启动 · 退出
 ```
 
 界面内置中英双语，**默认英文**（tokens.ci 本身是全英文的），用下拉里的「语言 / Language」子菜单随时切换，也可以在 config.json 里写 `language` 设默认。
@@ -58,8 +40,8 @@
 前 7 个模型各占一块，剩下的折进「其他」。数据刷新时面板会原地更新，不用重新打开。
 
 <p align="center">
-  <img src="docs/chart-lifetime.png" width="380" alt="累计模型分布（按 token）">
-  <img src="docs/chart-today-cost.png" width="380" alt="今日模型分布（按费用）">
+  <img src="docs/chart-today-tokens.png" width="360" alt="今日模型分布（按 token）">
+  <img src="docs/chart-lifetime-cost.png" width="360" alt="累计模型分布（按费用）">
 </p>
 
 ## 两个排名
