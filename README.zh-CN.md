@@ -7,6 +7,7 @@
 
 在 macOS 菜单栏上看 [tokens.ci](https://tokens.ci) 的 token 用量和排名，不用再开网页。
 
+[![Build](https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml/badge.svg)](https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/lucaisgrowing/tokens-menubar?style=flat-square)](https://github.com/lucaisgrowing/tokens-menubar/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square)
