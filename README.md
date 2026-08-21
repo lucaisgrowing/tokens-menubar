@@ -46,12 +46,12 @@ English and 简体中文 are both built in — switch from the Language submenu 
 
 ## Model distribution
 
-Clicking the **Lifetime** or **Today** row opens a donut chart of the per-model split, with a Tokens / Cost toggle:
+Clicking the **Lifetime** or **Today** row opens a popover under the menu bar icon with a donut chart of the per-model split, and a Tokens / Cost toggle:
 
 - **Lifetime** comes from the API's `modelUsage`
 - **Today** comes from the local CLI scan, so it is live rather than waiting on the next submission
 
-The top seven models get their own slice and the rest are folded into "Others". The window refreshes in place as new data arrives.
+The top seven models get their own slice and the rest are folded into "Others". The popover refreshes in place as new data arrives.
 
 ## The two ranks
 
@@ -134,7 +134,7 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # stdout — useful for checking the data path without the GUI.
 ./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
 
-# Render the donut chart offscreen to a PNG, to review the drawing itself.
+# Render the chart popover offscreen to a PNG, to review the layout itself.
 ./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
 
 # Compare this build against the latest GitHub release.

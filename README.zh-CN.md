@@ -46,12 +46,12 @@
 
 ## 模型分布饼图
 
-点**累计**或**今日**那一行，会弹出一个环形图窗口，带 Token / 费用 切换：
+点**累计**或**今日**那一行，会在菜单栏图标下方弹出一个面板，里面是环形图，右上角带 Token / 费用 切换：
 
 - **累计**用 API 的 `modelUsage`
 - **今日**用本地 CLI 扫描的结果，所以是实时的，不用等下一次提交
 
-前 7 个模型各占一块，剩下的折进「其他」。数据刷新时窗口会原地更新，不用重新打开。
+前 7 个模型各占一块，剩下的折进「其他」。数据刷新时面板会原地更新，不用重新打开。
 
 ## 两个排名
 
@@ -133,7 +133,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 # 把菜单栏那行、整个下拉、以及两个饼图的明细都打到终端，用来排查数据链路
 ./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
 
-# 把环形图离屏渲染成 PNG，用来检查画得对不对
+# 把整个图表面板离屏渲染成 PNG，用来检查画得对不对
 ./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
 
 # 拿当前版本和 GitHub 最新 release 比一下

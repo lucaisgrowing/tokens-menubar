@@ -629,7 +629,7 @@ final class Controller: NSObject, NSMenuDelegate {
             else { self.serverFailed = true }
             self.render()
             if let models = self.server?.models {
-                ChartWindowController.shared.update(scope: .lifetime, data: models.map(Self.datum))
+                ChartPopover.shared.update(scope: .lifetime, data: models.map(Self.datum))
             }
         }
     }
@@ -657,7 +657,7 @@ final class Controller: NSObject, NSMenuDelegate {
                     self.local.updatedAt = Date()
                 }
                 self.render()
-                ChartWindowController.shared.update(scope: .today,
+                ChartPopover.shared.update(scope: .today,
                                                    data: self.local.todayModels.map(Self.datum))
             }
         }
@@ -850,7 +850,7 @@ final class Controller: NSObject, NSMenuDelegate {
         UserDefaults.standard.set(raw, forKey: Controller.languageKey)
         transient = nil
         render()
-        ChartWindowController.shared.refreshLanguage()
+        ChartPopover.shared.refreshLanguage()
     }
 
     @objc private func setRankMode(_ sender: NSMenuItem) {
@@ -903,7 +903,8 @@ final class Controller: NSObject, NSMenuDelegate {
         let isToday = (sender.representedObject as? String) == "today"
         let scope: ChartScope = isToday ? .today : .lifetime
         let models = isToday ? local.todayModels : (server?.models ?? [])
-        ChartWindowController.shared.show(scope: scope, data: models.map(Self.datum))
+        ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
+                                 from: statusItem.button)
     }
 
     @objc private func openProfile() {
@@ -1005,7 +1006,7 @@ func runDump() -> Never {
     exit(server == nil || local.failed ? 1 : 0)
 }
 
-/// Renders the donut chart offscreen to a PNG, so the drawing can be reviewed
+/// Renders the chart popover offscreen to a PNG, so the layout can be reviewed
 /// without opening the GUI. `--scope today|lifetime`, `--metric tokens|cost`.
 func runChartPNG(path: String) -> Never {
     let (config, local, server) = collect()
@@ -1014,17 +1015,14 @@ func runChartPNG(path: String) -> Never {
     let scope: ChartScope = args.contains("lifetime") ? .lifetime : .today
     let metric: ChartMetric = args.contains("cost") ? .cost : .tokens
     let models = scope == .today ? local.todayModels : (server?.models ?? [])
+    let data = models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) }
 
-    let view = ChartView()
-    view.metric = metric
-    view.slices = chartSlices(models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) },
-                              metric: metric)
-    view.frame = NSRect(x: 0, y: 0, width: 380, height: view.fittingHeight)
-    guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { exit(1) }
-    view.cacheDisplay(in: view.bounds, to: rep)
-    guard let png = rep.representation(using: .png, properties: [:]) else { exit(1) }
+    guard let png = ChartPopover.shared.snapshot(scope: scope, data: data, metric: metric) else {
+        print("render failed")
+        exit(1)
+    }
     try? png.write(to: URL(fileURLWithPath: path))
-    print("wrote \(path) (\(t(scope.titleKey)), \(t(metric.titleKey)), \(view.slices.count) slices)")
+    print("wrote \(path) (\(t(scope.titleKey)), \(t(metric.titleKey)), \(chartSlices(data, metric: metric).count) slices)")
     exit(0)
 }
 

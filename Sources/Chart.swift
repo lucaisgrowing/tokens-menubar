@@ -174,88 +174,102 @@ final class ChartView: NSView {
 
 }
 
-/// One reusable window; opening a different scope re-targets it rather than
-/// piling up windows.
-final class ChartWindowController: NSObject {
-    static let shared = ChartWindowController()
+/// A popover anchored to the status item, so the breakdown reads as part of the
+/// menu bar rather than a window that appears in the middle of the screen.
+final class ChartPopover: NSObject {
+    static let shared = ChartPopover()
 
-    private var window: NSWindow?
-    private var chart: ChartView?
-    private var toggle: NSSegmentedControl?
+    private let popover = NSPopover()
+    private let chart = ChartView()
+    private let heading = NSTextField(labelWithString: "")
+    private var toggle: NSSegmentedControl!
+    private var chartHeight: NSLayoutConstraint!
     private var scope: ChartScope = .today
     private var data: [ChartDatum] = []
     private var metric: ChartMetric = .tokens
+    private var built = false
 
-    func show(scope: ChartScope, data: [ChartDatum]) {
+    private let width: CGFloat = 380
+    private let headerHeight: CGFloat = 44
+
+    func show(scope: ChartScope, data: [ChartDatum], from anchor: NSView?) {
+        guard let anchor else { return }
         self.scope = scope
         self.data = data
         build()
+        localise()
         reload()
-        window?.title = t(scope.titleKey)
-        window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
     }
 
-    /// Refreshes in place if the window is already showing this scope.
+    /// Refreshes in place if the popover is already showing this scope.
     func update(scope: ChartScope, data: [ChartDatum]) {
-        guard window?.isVisible == true, self.scope == scope else { return }
+        guard popover.isShown, self.scope == scope else { return }
         self.data = data
+        reload()
+    }
+
+    /// Called after a language switch so an open popover follows suit.
+    func refreshLanguage() {
+        guard built else { return }
+        localise()
         reload()
     }
 
     private func build() {
-        if window != nil {
-            localise()
-            return
-        }
-        let chart = ChartView()
-        chart.translatesAutoresizingMaskIntoConstraints = false
-        self.chart = chart
+        guard !built else { return }
+        built = true
+
+        heading.font = .systemFont(ofSize: 12, weight: .semibold)
+        heading.textColor = .secondaryLabelColor
+        heading.translatesAutoresizingMaskIntoConstraints = false
 
         let toggle = NSSegmentedControl(labels: [t("chart.tokens"), t("chart.cost")],
                                         trackingMode: .selectOne,
                                         target: self, action: #selector(metricChanged(_:)))
         toggle.selectedSegment = 0
+        toggle.segmentStyle = .capsule
+        toggle.controlSize = .small
         toggle.translatesAutoresizingMaskIntoConstraints = false
         self.toggle = toggle
 
-        let content = NSView()
+        chart.translatesAutoresizingMaskIntoConstraints = false
+        chartHeight = chart.heightAnchor.constraint(equalToConstant: 300)
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 344))
+        content.addSubview(heading)
         content.addSubview(toggle)
         content.addSubview(chart)
         NSLayoutConstraint.activate([
+            heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
+            heading.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
+            toggle.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
             toggle.topAnchor.constraint(equalTo: content.topAnchor, constant: 12),
-            toggle.centerXAnchor.constraint(equalTo: content.centerXAnchor),
-            chart.topAnchor.constraint(equalTo: toggle.bottomAnchor, constant: 8),
+            chart.topAnchor.constraint(equalTo: toggle.bottomAnchor, constant: 6),
             chart.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             chart.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            chart.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            chartHeight,
         ])
 
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 460),
-                         styleMask: [.titled, .closable, .fullSizeContentView],
-                         backing: .buffered, defer: false)
-        w.contentView = content
-        w.isReleasedWhenClosed = false
-        w.level = .floating
-        w.center()
-        window = w
+        let vc = NSViewController()
+        vc.view = content
+        popover.contentViewController = vc
+        popover.behavior = .transient
+        popover.animates = true
     }
 
     private func localise() {
-        toggle?.setLabel(t("chart.tokens"), forSegment: 0)
-        toggle?.setLabel(t("chart.cost"), forSegment: 1)
-        window?.title = t(scope.titleKey)
+        toggle.setLabel(t("chart.tokens"), forSegment: 0)
+        toggle.setLabel(t("chart.cost"), forSegment: 1)
+        heading.stringValue = t(scope.titleKey)
     }
 
     private func reload() {
-        guard let chart, let window else { return }
         chart.metric = metric
         chart.slices = chartSlices(data, metric: metric)
-        var frame = window.frame
-        let target = chart.fittingHeight + 44 + (window.frame.height - window.contentLayoutRect.height)
-        frame.origin.y += frame.height - target
-        frame.size.height = target
-        window.setFrame(frame, display: true)
+        chartHeight.constant = chart.fittingHeight
+        popover.contentSize = NSSize(width: width, height: headerHeight + chart.fittingHeight)
     }
 
     @objc private func metricChanged(_ sender: NSSegmentedControl) {
@@ -263,11 +277,22 @@ final class ChartWindowController: NSObject {
         reload()
     }
 
-    /// Called after a language switch so an open window follows suit.
-    func refreshLanguage() {
-        guard window != nil else { return }
+    /// Renders the popover's own content offscreen, so `--chart-png` shows the
+    /// real layout (heading and toggle included) rather than the chart alone.
+    func snapshot(scope: ChartScope, data: [ChartDatum], metric: ChartMetric) -> Data? {
+        self.scope = scope
+        self.data = data
+        self.metric = metric
+        build()
         localise()
+        toggle.selectedSegment = metric == .cost ? 1 : 0
         reload()
+        guard let view = popover.contentViewController?.view else { return nil }
+        view.frame = NSRect(x: 0, y: 0, width: width, height: headerHeight + chart.fittingHeight)
+        view.layoutSubtreeIfNeeded()
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        return rep.representation(using: .png, properties: [:])
     }
 }
 
