@@ -17,7 +17,7 @@
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square)
 ![Universal](https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square)
 
-单文件 Swift，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
+Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
 <p align="center">
   <img src="docs/menu.png" width="460" alt="TokensBar 下拉菜单">
@@ -49,7 +49,7 @@
 - **累计榜** —— 历史总量的排名，也就是 tokens.ci 首页那个榜
 - **今日榜** —— 只按当天提交量排，榜上只有当天提交过的人，所以人数少、名次跳动大
 
-`#87 / 265` 读作「第 87 名 / 榜上共 265 人」，**不是两个不同的排名**。当日名次在菜单栏里前面带个「今」字（`今#31`），免得跟累计名次看混。
+`#87 / 265` 是「第 87 名 / 榜上共 265 人」。当日名次在菜单栏里前面带个「今」字（`今#31`），用来跟累计名次区分。
 
 菜单栏显示哪一个，用下拉里的「菜单栏显示排名」随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在下拉里始终都列出来，切换只影响菜单栏那一行、以及差距提示看的是哪个榜。
 
@@ -121,10 +121,10 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 ## 命令行
 
 ```bash
-# 把菜单栏那行、整个下拉、以及两个饼图的明细都打到终端，用来排查数据链路
+# 把菜单栏那行、整个下拉、以及两个图表的明细打到终端，便于排查数据链路
 ./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
 
-# 把整个图表面板离屏渲染成 PNG，用来检查画得对不对
+# 把整个图表面板离屏渲染成 PNG，用来预览布局
 ./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
 
 # 拿当前版本和 GitHub 最新 release 比一下
@@ -139,21 +139,17 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 ## 工作原理
 
-两个数据源混着用：
+两个数据源：
 
-- **排名、累计、模型占比** —— tokens.ci 的公开只读接口 `GET /api/users/<name>` 和 `GET /api/leaderboard?period=all|today&limit=100&page=N`。两个榜各翻页翻到自己那条为止，名次、榜上人数和上一名都从同一个有序列表里取，所以差距是自洽的。不带任何凭据。
-- **今日、本周** —— 本地跑 `tokens --today --json` / `tokens --week --json`。服务端只有已提交的数据（`tokens serve` 默认 30 分钟一轮），本地扫描才是实时的，而且这两条各只要约 1 秒。
+- **排名、累计、模型占比** —— tokens.ci 的公开只读接口 `GET /api/users/<name>` 和 `GET /api/leaderboard?period=all|today`，不带任何凭据
+- **今日、本周** —— 本地跑 `tokens --today --json` / `tokens --week --json`，所以是实时的，不用等下一次提交
 
-几个容易算错的地方，实现里已经处理：
+两点值得知道：
 
-- `totalTokens = input + output + cacheRead + cacheWrite + reasoning`
-- `tokens --json` 顶层没有 `totalReasoning`，reasoning 得从 `entries[].reasoning` 自己加
-- API `modelUsage[].percentage` 是**花费**占比不是 token 占比（便宜模型会显示 0.0% 却吃掉两位数百分比的 token），所以下拉里的百分比是本地按 token 重算的
-- `GET /api/users/<name>?period=today` **不生效**，它照样回 `"period": "all"`，所以当日名次只能从当日榜列表里捞
-- 下拉里的「今日」（本地扫描，仅本机）和当日榜的名次（服务端，多设备累加）不是同一个数，多台机器共用一个账号时前者会偏小
-- GUI app 不继承 shell 的 `PATH`，`tokens` 二进制按 `/usr/local/bin` → `/opt/homebrew/bin` → `~/.cargo/bin` → `/usr/bin` 逐个探
+- 下拉里的百分比是按 **token** 重算的占比。API 自带的百分比是按**花费**算的，两者会不一样
+- 下拉里的「今日」是本机的本地扫描结果，而当日榜的名次来自服务端、会把账号下所有设备加起来；多台机器共用一个账号时，本机这个数会偏小
 
-如果 tokens.ci 走代理才通，注意它在 Cloudflare 后面：共享出口 IP 可能触发 managed challenge，此时接口会返回 403 的挑战页而不是 JSON，菜单里会显示成「服务端读取失败」。
+接口拉不通时，下拉会显示服务端读取失败，并保留上一次拿到的数据。
 
 ## 引用与致谢
 

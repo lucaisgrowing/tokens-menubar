@@ -17,7 +17,7 @@ Your [tokens.ci](https://tokens.ci) token usage and leaderboard rank, in the mac
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square)
 ![Universal](https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square)
 
-Single-file Swift, compiled straight with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
+Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
 <p align="center">
   <img src="docs/menu.png" width="460" alt="The TokensBar dropdown">
@@ -47,9 +47,9 @@ The top seven models get their own slice and the rest are folded into "Others". 
 ## The two ranks
 
 - **All-time** — ranked by lifetime tokens. This is the board on the tokens.ci front page.
-- **今日榜 (today)** — ranked by tokens submitted today only. Just the people who submitted today are on it, so it is a smaller board and the rank moves a lot.
+- **Today** — ranked by tokens submitted today only. Only people who submitted today are on it, so it is a smaller board and the rank moves more.
 
-`#87 / 265` reads "rank 87 out of 265 people on the board" — it is **one** rank, not two different ones. In the menu bar a daily rank is prefixed (`D#31`, 今#31 in Chinese) so it cannot be mistaken for a lifetime one.
+`#87 / 265` means rank 87 out of the 265 people on that board. In the menu bar a daily rank is prefixed (`D#31`, `今#31` in Chinese) to tell it apart from a lifetime one.
 
 Pick which one the menu bar shows from the "Rank Shown in Menu Bar" submenu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always listed in the dropdown; the setting only changes the menu bar line and which board the gap line refers to.
 
@@ -125,7 +125,7 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # stdout — useful for checking the data path without the GUI.
 ./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
 
-# Render the chart popover offscreen to a PNG, to review the layout itself.
+# Render the chart popover offscreen to a PNG, to preview the layout.
 ./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
 
 # Compare this build against the latest GitHub release.
@@ -140,21 +140,17 @@ The "Launch at Login" checkbox in the menu does the same thing as `--set-login`.
 
 ## How it works
 
-Two data sources, mixed:
+Two data sources:
 
-- **Ranks, lifetime totals, model split** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today&limit=100&page=N`. Both boards are paged through until your own entry turns up, so the rank, the board size and the entry above all come from one ordered list and the gap is self-consistent. No credentials are sent.
-- **Today and this week** — the local CLI, `tokens --today --json` and `tokens --week --json`. The server only knows what has been submitted (`tokens serve` submits every 30 minutes by default); the local scan is live, and each of these takes about a second.
+- **Ranks, lifetime totals and the model split** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today`. No credentials are sent.
+- **Today and this week** — the local CLI, `tokens --today --json` and `tokens --week --json`, so these are live instead of waiting for the next submission.
 
-Details that are easy to get wrong, handled here:
+Two things worth knowing:
 
-- `totalTokens = input + output + cacheRead + cacheWrite + reasoning`
-- `tokens --json` has no top-level `totalReasoning` — reasoning has to be summed from `entries[].reasoning`
-- `modelUsage[].percentage` from the API is a share of **cost**, not tokens (a cheap model can show 0.0% while eating a double-digit share of tokens), so the dropdown recomputes token share locally
-- `GET /api/users/<name>?period=today` **does not work** — it echoes `"period": "all"` regardless, so a daily rank has to come from the daily board listing
-- The dropdown's Today (local scan, this machine only) and the daily board rank (server-side, all your devices summed) are not the same number; with several machines on one account the local figure reads low
-- GUI apps do not inherit the shell `PATH`, so the `tokens` binary is probed at `/usr/local/bin` → `/opt/homebrew/bin` → `~/.cargo/bin` → `/usr/bin`
+- Percentages in the dropdown are a share of tokens, recomputed locally. The API's own percentages are a share of cost, so the two can differ.
+- Today in the dropdown is this machine's local scan, while the daily board rank is server-side and sums every device on the account. With more than one machine the local figure reads lower.
 
-If tokens.ci only works for you through a proxy, note that it sits behind Cloudflare: a shared exit IP can trigger a managed challenge, in which case the endpoints return a 403 challenge page instead of JSON and the dropdown reports that the server read failed.
+If the API cannot be reached, the dropdown reports that the server read failed and keeps the last figures it had.
 
 ## Credits
 
