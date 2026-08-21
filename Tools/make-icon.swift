@@ -74,9 +74,13 @@ func drawIcon(px: Int) -> Data {
     cg.strokePath()
     cg.restoreGState()
 
-    if let bolt = whiteSymbol("bolt.fill", pointSize: size * 0.46) {
+    // Bolt sits above centre to leave room for the wordmark. Small sizes stay
+    // glyph-only — "tokens" is unreadable below ~128px and just muddies it.
+    let showsWordmark = px >= 128
+    let boltCentreY = showsWordmark ? size * 0.56 : size * 0.5
+    if let bolt = whiteSymbol("bolt.fill", pointSize: size * (showsWordmark ? 0.40 : 0.46)) {
         let s = bolt.size
-        let target = CGRect(x: (size - s.width) / 2, y: (size - s.height) / 2,
+        let target = CGRect(x: (size - s.width) / 2, y: boltCentreY - s.height / 2,
                             width: s.width, height: s.height)
         cg.saveGState()
         cg.setShadow(offset: CGSize(width: 0, height: -size * 0.008),
@@ -86,6 +90,20 @@ func drawIcon(px: Int) -> Data {
         cg.restoreGState()
     } else {
         FileHandle.standardError.write("warning: bolt.fill unavailable\n".data(using: .utf8)!)
+    }
+
+    if showsWordmark {
+        let pointSize = size * 0.135
+        let font = NSFont.systemFont(ofSize: pointSize, weight: .semibold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont(descriptor: font.fontDescriptor.withDesign(.rounded) ?? font.fontDescriptor,
+                          size: pointSize) ?? font,
+            .foregroundColor: NSColor(white: 1, alpha: 0.93),
+            .kern: pointSize * 0.04,
+        ]
+        let text = NSAttributedString(string: "tokens", attributes: attrs)
+        let bounds = text.size()
+        text.draw(at: NSPoint(x: (size - bounds.width) / 2, y: size * 0.235 - bounds.height / 2))
     }
 
     NSGraphicsContext.restoreGraphicsState()

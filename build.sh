@@ -8,7 +8,6 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 APP="$DIR/TokensBar.app"
 BIN="$APP/Contents/MacOS/TokensBar"
-SRC="$DIR/Sources/main.swift"
 DEPLOY_TARGET="13.0"
 
 UNIVERSAL=0
@@ -29,7 +28,7 @@ compile() { # $1 = arch, $2 = output path
   swiftc -O -swift-version 5 \
     -target "$1-apple-macos$DEPLOY_TARGET" \
     -framework AppKit \
-    -o "$2" "$SRC"
+    -o "$2" "$DIR"/Sources/*.swift
 }
 
 if [[ $UNIVERSAL -eq 1 ]]; then

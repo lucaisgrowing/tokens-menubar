@@ -24,6 +24,8 @@ struct Config {
     var topModels = 5
     /// Which rank the menu bar shows by default; the menu can override it.
     var menuBarRank: RankMode = .allTime
+    /// Initial UI language; the menu can override it.
+    var language: Lang = .en
 
     static let configPath = NSHomeDirectory() + "/.config/tokens-menubar/config.json"
     static let credentialsPath = NSHomeDirectory() + "/.config/tokens/credentials.json"
@@ -43,6 +45,7 @@ struct Config {
         if let v = (o["localRefreshSeconds"] as? NSNumber)?.doubleValue, v >= 30 { cfg.localRefreshSeconds = v }
         if let v = (o["topModels"] as? NSNumber)?.intValue, v >= 0 { cfg.topModels = v }
         if let v = o["menuBarRank"] as? String, let m = RankMode(rawValue: v) { cfg.menuBarRank = m }
+        if let v = o["language"] as? String, let l = Lang(rawValue: v) { cfg.language = l }
         return cfg
     }
 
@@ -93,11 +96,42 @@ func pad(_ s: String, _ width: Int) -> String {
     return n >= width ? s : s + String(repeating: " ", count: width - n)
 }
 
+/// CJK glyphs occupy two cells in a monospaced run, so padding by character
+/// count would misalign the Chinese labels against the English ones.
+func displayWidth(_ s: String) -> Int {
+    s.unicodeScalars.reduce(0) { total, u in
+        switch u.value {
+        case 0x1100...0x115F, 0x2E80...0xA4CF, 0xA960...0xA97F, 0xAC00...0xD7A3,
+             0xF900...0xFAFF, 0xFE30...0xFE6F, 0xFF00...0xFF60, 0xFFE0...0xFFE6,
+             0x1F300...0x1F9FF, 0x20000...0x3FFFD:
+            return total + 2
+        default:
+            return total + 1
+        }
+    }
+}
+
+func padDisplay(_ s: String, _ width: Int) -> String {
+    let w = displayWidth(s)
+    return w >= width ? s : s + String(repeating: " ", count: width - w)
+}
+
+/// Truncates to a display width, for columns that must not run into each other.
+func clipDisplay(_ s: String, _ width: Int) -> String {
+    guard displayWidth(s) > width else { return s }
+    var out = ""
+    for ch in s {
+        if displayWidth(out + String(ch)) > width - 1 { break }
+        out.append(ch)
+    }
+    return out + "…"
+}
+
 /// One layout for value rows, shared by the menu and `--dump`.
 func rowText(_ label: String, _ value: String, _ trailing: String?) -> String {
-    let v = pad(value, 11)
-    guard let trailing else { return label + "   " + v }
-    return label + "   " + v + (v.hasSuffix(" ") ? "" : " ") + trailing
+    let head = padDisplay(label, 11) + padDisplay(value, 11)
+    guard let trailing else { return head }
+    return head + (head.hasSuffix(" ") ? "" : " ") + trailing
 }
 
 func fmtClock(_ date: Date) -> String {
@@ -111,8 +145,7 @@ func fmtClock(_ date: Date) -> String {
 struct ModelSlice {
     let model: String
     let tokens: Int
-    /// The API's `percentage` field is a share of *cost*, not tokens.
-    let costShare: Double
+    let cost: Double
 }
 
 struct Neighbour {
@@ -135,9 +168,12 @@ enum RankMode: String {
     case allTime = "all"
     case today = "today"
 
-    var label: String { self == .today ? "今日榜" : "累计榜" }
-    /// Menu bar prefix — "今" disambiguates a daily rank from a lifetime one.
-    var badge: String { self == .today ? "今#" : "#" }
+    var label: String { self == .today ? t("board.today") : t("board.allTime") }
+    /// Menu bar prefix — marks a daily rank so it cannot be read as a lifetime one.
+    var badge: String {
+        if self == .allTime { return "#" }
+        return L10n.current == .zh ? "今#" : "D#"
+    }
 }
 
 struct ServerStats {
@@ -161,6 +197,8 @@ struct LocalStats {
     var todayCost = 0.0
     var weekTokens = 0
     var weekCost = 0.0
+    /// Per-model breakdown of today, for the donut chart.
+    var todayModels: [ModelSlice] = []
     var updatedAt: Date?
     var failed = false
 }
@@ -223,8 +261,9 @@ enum CLI {
     }
 
     /// `tokens --json` totals: the site counts input+output+cacheRead+cacheWrite+reasoning.
-    /// reasoning has no top-level total, so it is summed from the entries.
-    static func report(_ extraArgs: [String]) -> (tokens: Int, cost: Double)? {
+    /// reasoning has no top-level total, so it is summed from the entries. The
+    /// entries also carry the per-model split used by the chart.
+    static func report(_ extraArgs: [String]) -> (tokens: Int, cost: Double, models: [ModelSlice])? {
         guard let (data, status) = run(extraArgs + ["--json", "--no-spinner"]), status == 0,
               let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
@@ -232,7 +271,15 @@ enum CLI {
         let reasoning = entries.reduce(0) { $0 + int($1, "reasoning") }
         let total = int(o, "totalInput") + int(o, "totalOutput")
             + int(o, "totalCacheRead") + int(o, "totalCacheWrite") + reasoning
-        return (total, dbl(o, "totalCost"))
+        // Entries are grouped by client+model, so the same model can appear more
+        // than once; the chart merges duplicate labels itself.
+        let models = entries.map { e in
+            ModelSlice(model: e["model"] as? String ?? "?",
+                       tokens: int(e, "input") + int(e, "output") + int(e, "cacheRead")
+                           + int(e, "cacheWrite") + int(e, "reasoning"),
+                       cost: dbl(e, "cost"))
+        }
+        return (total, dbl(o, "totalCost"), models)
     }
 }
 
@@ -279,7 +326,7 @@ final class API {
             let models = (o["modelUsage"] as? [[String: Any]] ?? []).map {
                 ModelSlice(model: $0["model"] as? String ?? "?",
                            tokens: int($0, "tokens"),
-                           costShare: dbl($0, "percentage"))
+                           cost: dbl($0, "cost"))
             }
             var stats = ServerStats(
                 rank: int(u, "rank"),
@@ -394,7 +441,8 @@ enum LoginItem {
 
 enum Line {
     case header(String)
-    case row(String, String, String?)
+    /// A non-nil scope makes the row clickable and opens that chart.
+    case row(String, String, String?, ChartScope?)
     case note(String)
     case small(String)
     case separator
@@ -419,60 +467,66 @@ struct Presenter {
     }
 
     var tooltip: String {
-        var bits = [local.failed ? "找不到 tokens CLI 或本地扫描失败"
-                                 : "今日 \(fmtExact(local.todayTokens)) tokens"]
+        var bits = [local.failed ? t("tooltip.localFailed")
+                                 : t("tooltip.today", fmtExact(local.todayTokens))]
         if let s = server {
-            if let a = s.allTime, a.rank > 0 { bits.append("累计榜 第 \(a.rank) / \(a.totalUsers) 名") }
-            if let t = s.today { bits.append(t.rank > 0 ? "今日榜 第 \(t.rank) / \(t.totalUsers) 名"
-                                                       : "今日榜 未上榜") }
+            if let a = s.allTime, a.rank > 0 {
+                bits.append(t("tooltip.rankAllTime", a.rank, a.totalUsers))
+            }
+            if let d = s.today {
+                bits.append(d.rank > 0 ? t("tooltip.rankToday", d.rank, d.totalUsers)
+                                       : t("tooltip.rankTodayNone"))
+            }
         }
         return bits.joined(separator: "\n")
     }
 
     private func standingRow(_ mode: RankMode) -> Line? {
         guard let st = server?.standing(mode) else { return nil }
-        let value = st.rank > 0 ? "#\(st.rank) / \(st.totalUsers)" : "未上榜"
-        return .row(mode.label, value, mode == rankMode ? "· 菜单栏" : nil)
+        let value = st.rank > 0 ? "#\(st.rank) / \(st.totalUsers)" : t("board.notRanked")
+        return .row(mode.label, value, mode == rankMode ? t("marker.menuBar") : nil, nil)
     }
 
     private var gapLine: Line? {
         guard let st = server?.standing(rankMode) else { return nil }
-        if st.rank == 0 {
-            return .note("\(rankMode.label) 未上榜 —— 今天还没有提交记录")
-        }
+        if st.rank == 0 { return .note(t("gap.unranked", rankMode.label)) }
         guard let above = st.above else {
-            return st.rank == 1 ? .note("\(rankMode.label) 已经是第 1 名") : nil
+            return st.rank == 1 ? .note(t("gap.first", rankMode.label)) : nil
         }
         let gap = max(0, above.tokens - st.tokens)
-        return .note("\(rankMode.label) 距 #\(above.rank) @\(above.username) 还差 \(fmtTokens(gap))")
+        return .note(t("gap.behind", rankMode.label, fmtTokens(gap), above.rank, above.username))
     }
 
     var lines: [Line] {
         var out: [Line] = []
-        out.append(.header(config.username.isEmpty ? "未登录" : "@" + config.username))
+        out.append(.header(config.username.isEmpty ? t("state.notLoggedIn") : "@" + config.username))
         out.append(.separator)
 
         if server != nil {
             if let l = standingRow(.allTime) { out.append(l) }
             if let l = standingRow(.today) { out.append(l) }
-            out.append(.note("#名次 / 榜上总人数；今日榜只算当天提交过的人"))
+            out.append(.note(t("board.hint")))
             out.append(.separator)
         }
 
         if let s = server {
-            out.append(.row("累计", fmtTokens(s.totalTokens), fmtMoney(s.totalCost)))
+            out.append(.row(t("row.lifetime"), fmtTokens(s.totalTokens),
+                            fmtMoney(s.totalCost), .lifetime))
         } else if serverFailed {
-            out.append(.note("累计   服务端读取失败（检查代理 / tokens.ci 可达性）"))
+            out.append(.note(t("state.serverFailed")))
         } else {
-            out.append(.note("累计   载入中…"))
+            out.append(.note(t("state.loading")))
         }
 
         if local.failed {
-            out.append(.note("今日   本地扫描失败（找不到 tokens CLI？）"))
+            out.append(.note(t("state.localFailed")))
         } else {
-            out.append(.row("今日", fmtTokens(local.todayTokens), fmtMoney(local.todayCost)))
-            out.append(.row("本周", fmtTokens(local.weekTokens), fmtMoney(local.weekCost)))
+            out.append(.row(t("row.today"), fmtTokens(local.todayTokens),
+                            fmtMoney(local.todayCost), .today))
+            out.append(.row(t("row.week"), fmtTokens(local.weekTokens),
+                            fmtMoney(local.weekCost), nil))
         }
+        out.append(.small(t("chart.hint")))
 
         if let l = gapLine {
             out.append(.separator)
@@ -483,9 +537,9 @@ struct Presenter {
             out.append(.separator)
             let denom = Double(max(1, s.totalTokens))
             for m in s.models.sorted(by: { $0.tokens > $1.tokens }).prefix(config.topModels) {
-                let n = m.model.count > 22 ? String(m.model.prefix(21)) + "…" : m.model
+                let n = clipDisplay(m.model, 22)
                 let share = Double(m.tokens) / denom * 100
-                out.append(.small("\(pad(n, 24))\(String(format: "%5.1f%%", share))  \(fmtTokens(m.tokens))"))
+                out.append(.small("\(padDisplay(n, 24))\(String(format: "%5.1f%%", share))  \(fmtTokens(m.tokens))"))
             }
         }
 
@@ -494,9 +548,9 @@ struct Presenter {
             out.append(.note(transient))
         } else {
             var bits: [String] = []
-            if let d = local.updatedAt { bits.append("本地 \(fmtClock(d))") }
-            if let d = server?.updatedAt { bits.append("服务端 \(fmtClock(d))") }
-            if server?.isStale == true { bits.append("⚠ 服务端数据偏旧") }
+            if let d = local.updatedAt { bits.append(t("stamp.local", fmtClock(d))) }
+            if let d = server?.updatedAt { bits.append(t("stamp.server", fmtClock(d))) }
+            if server?.isStale == true { bits.append(t("stamp.stale")) }
             if !bits.isEmpty { out.append(.note(bits.joined(separator: "  ·  "))) }
         }
         return out
@@ -517,21 +571,27 @@ final class Controller: NSObject, NSMenuDelegate {
     private var rankMode: RankMode = .allTime
     private var transient: String?
     private var busy = false
+    private var update: UpdateInfo?
+    private var checkingUpdate = false
     private var lastServerFetch: Date?
     private var apiTimer: Timer?
     private var localTimer: Timer?
+    private var updateTimer: Timer?
     private let workQueue = DispatchQueue(label: "ci.tokens.menubar.cli", qos: .utility)
 
     private let monoFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
     private let rowFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
-    /// config.json sets the default; flipping it in the menu wins from then on.
+    /// config.json sets the defaults; flipping them in the menu wins from then on.
     private static let rankModeKey = "menuBarRank"
+    private static let languageKey = "language"
 
     override init() {
         super.init()
-        let stored = UserDefaults.standard.string(forKey: Controller.rankModeKey)
-        rankMode = stored.flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
+        let storedRank = UserDefaults.standard.string(forKey: Controller.rankModeKey)
+        rankMode = storedRank.flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
+        let storedLang = UserDefaults.standard.string(forKey: Controller.languageKey)
+        L10n.current = storedLang.flatMap(Lang.init(rawValue:)) ?? config.language
     }
 
     func start() {
@@ -552,6 +612,11 @@ final class Controller: NSObject, NSMenuDelegate {
         localTimer = Timer.scheduledTimer(withTimeInterval: config.localRefreshSeconds, repeats: true) {
             [weak self] _ in self?.refreshLocal()
         }
+        // Quiet daily check; the menu item does the same thing on demand.
+        checkForUpdates(announce: false)
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) {
+            [weak self] _ in self?.checkForUpdates(announce: false)
+        }
     }
 
     // MARK: Data
@@ -563,7 +628,14 @@ final class Controller: NSObject, NSMenuDelegate {
             if let stats { self.server = stats; self.serverFailed = false }
             else { self.serverFailed = true }
             self.render()
+            if let models = self.server?.models {
+                ChartWindowController.shared.update(scope: .lifetime, data: models.map(Self.datum))
+            }
         }
+    }
+
+    private static func datum(_ m: ModelSlice) -> ChartDatum {
+        ChartDatum(label: m.model, tokens: m.tokens, cost: m.cost)
     }
 
     private func refreshLocal() {
@@ -576,12 +648,50 @@ final class Controller: NSObject, NSMenuDelegate {
                     self.local.failed = true
                 } else {
                     self.local.failed = false
-                    if let today { self.local.todayTokens = today.tokens; self.local.todayCost = today.cost }
+                    if let today {
+                        self.local.todayTokens = today.tokens
+                        self.local.todayCost = today.cost
+                        self.local.todayModels = today.models
+                    }
                     if let week { self.local.weekTokens = week.tokens; self.local.weekCost = week.cost }
                     self.local.updatedAt = Date()
                 }
                 self.render()
+                ChartWindowController.shared.update(scope: .today,
+                                                   data: self.local.todayModels.map(Self.datum))
             }
+        }
+    }
+
+    private func checkForUpdates(announce: Bool) {
+        if announce {
+            checkingUpdate = true
+            transient = t("update.checking")
+            render()
+        }
+        Updates.check { [weak self] info in
+            guard let self else { return }
+            self.checkingUpdate = false
+            self.update = info
+            if announce {
+                if let info {
+                    self.transient = info.isNewer
+                        ? t("update.available", info.latest, info.current)
+                        : t("update.upToDate", info.current)
+                } else {
+                    self.transient = t("update.failed")
+                }
+                self.clearTransient(after: 20)
+            }
+            self.render()
+        }
+    }
+
+    private func clearTransient(after seconds: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self else { return }
+            self.transient = nil
+            self.render()
         }
     }
 
@@ -619,8 +729,14 @@ final class Controller: NSObject, NSMenuDelegate {
                 .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)])
             it.target = self
             return it
-        case .row(let label, let value, let trailing):
-            return disabledItem(rowText(label, value, trailing), font: rowFont, dim: false)
+        case .row(let label, let value, let trailing, let scope):
+            let text = rowText(label, value, trailing)
+            guard let scope else { return disabledItem(text, font: rowFont, dim: false) }
+            let it = NSMenuItem(title: text, action: #selector(openChart(_:)), keyEquivalent: "")
+            it.attributedTitle = NSAttributedString(string: text, attributes: [.font: rowFont])
+            it.representedObject = scope == .today ? "today" : "lifetime"
+            it.target = self
+            return it
         case .note(let text):
             return disabledItem(text, font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), dim: true)
         case .small(let text):
@@ -648,42 +764,55 @@ final class Controller: NSObject, NSMenuDelegate {
     private func addFooter() {
         menu.addItem(.separator())
 
-        let submit = NSMenuItem(title: busy ? "提交中…" : "立即提交 (tokens submit)",
+        let submit = NSMenuItem(title: busy ? t("action.submitting") : t("action.submit"),
                                 action: #selector(submitNow), keyEquivalent: "s")
         submit.target = self
         submit.isEnabled = !busy && CLI.binary() != nil
         menu.addItem(submit)
 
-        let refresh = NSMenuItem(title: "刷新", action: #selector(refreshAll), keyEquivalent: "r")
+        let refresh = NSMenuItem(title: t("action.refresh"), action: #selector(refreshAll), keyEquivalent: "r")
         refresh.target = self
         menu.addItem(refresh)
 
         menu.addItem(rankModeItem())
+        menu.addItem(languageItem())
 
-        let profile = NSMenuItem(title: "打开 tokens.ci 主页", action: #selector(openProfile), keyEquivalent: "o")
+        let profile = NSMenuItem(title: t("action.openProfile"), action: #selector(openProfile), keyEquivalent: "o")
         profile.target = self
         menu.addItem(profile)
 
-        let login = NSMenuItem(title: "开机启动", action: #selector(toggleLoginItem), keyEquivalent: "")
+        let updates = NSMenuItem(title: updateItemTitle(),
+                                 action: #selector(updateItemClicked), keyEquivalent: "u")
+        updates.target = self
+        updates.isEnabled = !checkingUpdate
+        menu.addItem(updates)
+
+        let login = NSMenuItem(title: t("action.launchAtLogin"), action: #selector(toggleLoginItem), keyEquivalent: "")
         login.target = self
         login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "退出 TokensBar", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: t("action.quit"), action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
+    }
+
+    private func updateItemTitle() -> String {
+        if checkingUpdate { return t("update.checking") }
+        if let u = update, u.isNewer { return t("update.openPage", u.latest) }
+        return t("action.checkUpdates")
     }
 
     /// Submenu picking which rank the menu bar shows, with the live numbers
     /// inline so the choice is obvious.
     private func rankModeItem() -> NSMenuItem {
-        let parent = NSMenuItem(title: "菜单栏显示排名", action: nil, keyEquivalent: "")
+        let parent = NSMenuItem(title: t("action.rankMode"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         for mode in [RankMode.allTime, .today] {
             let st = server?.standing(mode)
             let detail: String
-            if let st { detail = st.rank > 0 ? "  #\(st.rank) / \(st.totalUsers)" : "  未上榜" }
+            if let st { detail = st.rank > 0 ? "  #\(st.rank) / \(st.totalUsers)" : "  " + t("board.notRanked") }
             else { detail = "" }
             let it = NSMenuItem(title: mode.label + detail,
                                 action: #selector(setRankMode(_:)), keyEquivalent: "")
@@ -693,10 +822,35 @@ final class Controller: NSObject, NSMenuDelegate {
             sub.addItem(it)
         }
         sub.addItem(.separator())
-        sub.addItem(disabledItem("累计榜 = 历史总量排名", font: rowFont, dim: true))
-        sub.addItem(disabledItem("今日榜 = 只算当天提交量的排名", font: rowFont, dim: true))
+        sub.addItem(disabledItem(t("board.explainAllTime"), font: rowFont, dim: true))
+        sub.addItem(disabledItem(t("board.explainToday"), font: rowFont, dim: true))
         parent.submenu = sub
         return parent
+    }
+
+    private func languageItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: t("action.language"), action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        for lang in Lang.allCases {
+            let it = NSMenuItem(title: lang.displayName,
+                                action: #selector(setLanguage(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = lang.rawValue
+            it.state = lang == L10n.current ? .on : .off
+            sub.addItem(it)
+        }
+        parent.submenu = sub
+        return parent
+    }
+
+    @objc private func setLanguage(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let lang = Lang(rawValue: raw), lang != L10n.current else { return }
+        L10n.current = lang
+        UserDefaults.standard.set(raw, forKey: Controller.languageKey)
+        transient = nil
+        render()
+        ChartWindowController.shared.refreshLanguage()
     }
 
     @objc private func setRankMode(_ sender: NSMenuItem) {
@@ -718,7 +872,7 @@ final class Controller: NSObject, NSMenuDelegate {
     @objc private func submitNow() {
         guard !busy else { return }
         busy = true
-        transient = "提交中…"
+        transient = t("action.submitting")
         render()
         workQueue.async { [weak self] in
             let result = CLI.run(["submit", "--no-spinner"], timeout: 300)
@@ -726,16 +880,30 @@ final class Controller: NSObject, NSMenuDelegate {
                 guard let self else { return }
                 self.busy = false
                 let ok = result?.1 == 0
-                self.transient = ok ? "已提交 ✓ \(fmtClock(Date()))" : "提交失败 ✗ \(fmtClock(Date()))"
+                self.transient = ok ? t("action.submitted", fmtClock(Date()))
+                                    : t("action.submitFailed", fmtClock(Date()))
                 self.render()
                 // Server-side aggregation lags a moment behind the POST.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.refreshServer() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 90) {
-                    self.transient = nil
-                    self.render()
-                }
+                self.clearTransient(after: 90)
             }
         }
+    }
+
+    /// Opens the release page when an update is waiting, otherwise checks.
+    @objc private func updateItemClicked() {
+        if let u = update, u.isNewer, let url = URL(string: u.url) {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        checkForUpdates(announce: true)
+    }
+
+    @objc private func openChart(_ sender: NSMenuItem) {
+        let isToday = (sender.representedObject as? String) == "today"
+        let scope: ChartScope = isToday ? .today : .lifetime
+        let models = isToday ? local.todayModels : (server?.models ?? [])
+        ChartWindowController.shared.show(scope: scope, data: models.map(Self.datum))
     }
 
     @objc private func openProfile() {
@@ -755,20 +923,21 @@ final class Controller: NSObject, NSMenuDelegate {
 
 // MARK: - Entry point
 
-/// Prints exactly what the menu would show, then exits. Useful for checking the
-/// data path (CLI discovery, network, parsing) without the GUI.
-func runDump() -> Never {
+/// Loads config, the local CLI reports and the server stats, blocking until both
+/// are in. Shared by the diagnostic flags below.
+func collect() -> (config: Config, local: LocalStats, server: ServerStats?) {
     let config = Config.load()
-    print("username: \(config.username.isEmpty ? "(none)" : config.username)")
-    print("tokens CLI: \(CLI.binary() ?? "NOT FOUND")")
-
     var local = LocalStats()
     let today = CLI.report(["--today"])
     let week = CLI.report(["--week"])
     if today == nil && week == nil {
         local.failed = true
     } else {
-        if let today { local.todayTokens = today.tokens; local.todayCost = today.cost }
+        if let today {
+            local.todayTokens = today.tokens
+            local.todayCost = today.cost
+            local.todayModels = today.models
+        }
         if let week { local.weekTokens = week.tokens; local.weekCost = week.cost }
         local.updatedAt = Date()
     }
@@ -778,6 +947,29 @@ func runDump() -> Never {
     let api = API(config: config) // held strongly: fetch captures self weakly
     api.fetch(on: .global()) { s in server = s; sema.signal() }
     if sema.wait(timeout: .now() + 45) == .timedOut { print("api: TIMEOUT") }
+    return (config, local, server)
+}
+
+func applyLanguage(_ config: Config) {
+    if let i = CommandLine.arguments.firstIndex(of: "--lang"),
+       CommandLine.arguments.count > i + 1,
+       let lang = Lang(rawValue: CommandLine.arguments[i + 1]) {
+        L10n.current = lang
+    } else {
+        L10n.current = UserDefaults.standard.string(forKey: "language")
+            .flatMap(Lang.init(rawValue:)) ?? config.language
+    }
+}
+
+/// Prints exactly what the menu would show, then exits. Useful for checking the
+/// data path (CLI discovery, network, parsing) without the GUI.
+/// `--lang en|zh` overrides the language for this run only.
+func runDump() -> Never {
+    let (config, local, server) = collect()
+    applyLanguage(config)
+    print("username: \(config.username.isEmpty ? "(none)" : config.username)")
+    print("tokens CLI: \(CLI.binary() ?? "NOT FOUND")")
+    print("language: \(L10n.current.rawValue)   version: \(Updates.currentVersion)")
 
     let mode = UserDefaults.standard.string(forKey: "menuBarRank")
         .flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
@@ -787,15 +979,76 @@ func runDump() -> Never {
     for line in p.lines {
         switch line {
         case .separator: print("  " + String(repeating: "─", count: 42))
-        case .header(let t): print("  " + t)
-        case .row(let l, let v, let tr): print("  " + rowText(l, v, tr))
-        case .note(let t), .small(let t): print("  " + t)
+        case .header(let s): print("  " + s)
+        case .row(let l, let v, let tr, let scope):
+            print("  " + rowText(l, v, tr) + (scope == nil ? "" : "   ← clickable"))
+        case .note(let s), .small(let s): print("  " + s)
+        }
+    }
+
+    // The same slices the donut chart would draw.
+    for (scope, models) in [(ChartScope.today, local.todayModels),
+                            (ChartScope.lifetime, server?.models ?? [])] {
+        print("\n\(t(scope.titleKey)):")
+        for metric in [ChartMetric.tokens, .cost] {
+            let slices = chartSlices(models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) },
+                                     metric: metric)
+            let total = slices.reduce(0.0) { $0 + $1.value(metric) }
+            print("  [\(t(metric.titleKey))] total \(metric == .tokens ? fmtTokens(Int(total)) : fmtMoney(total))")
+            for s in slices {
+                let share = total > 0 ? s.value(metric) / total * 100 : 0
+                let value = metric == .tokens ? fmtTokens(s.tokens) : fmtMoney(s.cost)
+                print("    \(padDisplay(clipDisplay(s.label, 23), 24))\(pad(value, 11))\(String(format: "%5.1f%%", share))")
+            }
         }
     }
     exit(server == nil || local.failed ? 1 : 0)
 }
 
+/// Renders the donut chart offscreen to a PNG, so the drawing can be reviewed
+/// without opening the GUI. `--scope today|lifetime`, `--metric tokens|cost`.
+func runChartPNG(path: String) -> Never {
+    let (config, local, server) = collect()
+    applyLanguage(config)
+    let args = CommandLine.arguments
+    let scope: ChartScope = args.contains("lifetime") ? .lifetime : .today
+    let metric: ChartMetric = args.contains("cost") ? .cost : .tokens
+    let models = scope == .today ? local.todayModels : (server?.models ?? [])
+
+    let view = ChartView()
+    view.metric = metric
+    view.slices = chartSlices(models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) },
+                              metric: metric)
+    view.frame = NSRect(x: 0, y: 0, width: 380, height: view.fittingHeight)
+    guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { exit(1) }
+    view.cacheDisplay(in: view.bounds, to: rep)
+    guard let png = rep.representation(using: .png, properties: [:]) else { exit(1) }
+    try? png.write(to: URL(fileURLWithPath: path))
+    print("wrote \(path) (\(t(scope.titleKey)), \(t(metric.titleKey)), \(view.slices.count) slices)")
+    exit(0)
+}
+
+/// Prints the update check result and exits.
+func runUpdateCheck() -> Never {
+    var result: UpdateInfo??
+    let sema = DispatchSemaphore(value: 0)
+    Updates.check(on: .global()) { result = $0; sema.signal() }
+    _ = sema.wait(timeout: .now() + 30)
+    guard let info = result ?? nil else {
+        print("update check failed")
+        exit(1)
+    }
+    print("current: v\(info.current)  latest: \(info.latest)  newer: \(info.isNewer)")
+    print("url: \(info.url)")
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--dump") { runDump() }
+if CommandLine.arguments.contains("--check-updates") { runUpdateCheck() }
+if let i = CommandLine.arguments.firstIndex(of: "--chart-png"),
+   CommandLine.arguments.count > i + 1 {
+    runChartPNG(path: CommandLine.arguments[i + 1])
+}
 
 // `--set-login on|off` toggles the LaunchAgent without opening the menu.
 if let i = CommandLine.arguments.firstIndex(of: "--set-login") {

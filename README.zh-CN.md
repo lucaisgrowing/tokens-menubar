@@ -22,13 +22,14 @@
 下拉:
   @your-handle
   ──────────────────────────────
-  累计榜   #87 / 265  · 菜单栏
-  今日榜   #31 / 121
+  累计榜     #87 / 265  · 菜单栏
+  今日榜     #31 / 121
   #名次 / 榜上总人数；今日榜只算当天提交过的人
   ──────────────────────────────
-  累计   1.82B      $3,410.55
-  今日   12.4M      $54.30
-  本周   210.6M     $612.40
+  累计       1.82B      $3,410.55    ← 点开看饼图
+  今日       12.4M      $54.30       ← 点开看饼图
+  本周       210.6M     $612.40
+  点上面任意一行看模型分布
   ──────────────────────────────
   累计榜 距 #86 @someone-ahead 还差 24.3M
   ──────────────────────────────
@@ -37,8 +38,20 @@
   glm-4.5-flash            14.1%  568.2M
   ──────────────────────────────
   本地 12:21  ·  服务端 12:06
-  立即提交 / 刷新 / 菜单栏显示排名 / 打开主页 / 开机启动 / 退出
+  立即提交 · 刷新 · 菜单栏显示排名 · 语言
+  打开 tokens.ci 主页 · 检查更新 · 开机启动 · 退出
 ```
+
+界面内置中英双语，**默认英文**（tokens.ci 本身是全英文的），用下拉里的「语言 / Language」子菜单随时切换，也可以在 config.json 里写 `language` 设默认。
+
+## 模型分布饼图
+
+点**累计**或**今日**那一行，会弹出一个环形图窗口，带 Token / 费用 切换：
+
+- **累计**用 API 的 `modelUsage`
+- **今日**用本地 CLI 扫描的结果，所以是实时的，不用等下一次提交
+
+前 7 个模型各占一块，剩下的折进「其他」。数据刷新时窗口会原地更新，不用重新打开。
 
 ## 两个排名
 
@@ -90,6 +103,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 ```json
 {
   "username": "your-github-username",
+  "language": "en",
   "menuBarRank": "all",
   "apiRefreshSeconds": 300,
   "localRefreshSeconds": 120,
@@ -101,18 +115,29 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 | --- | --- | --- |
 | `username` | 读 `~/.config/tokens/credentials.json` | tokens.ci 用户名 |
 | `apiBase` | `https://tokens.ci` | API 地址 |
+| `language` | `en` | 界面语言：`en` 或 `zh` |
 | `menuBarRank` | `all` | 菜单栏默认显示哪个排名：`all` 累计榜 / `today` 当日榜 |
 | `apiRefreshSeconds` | 300 | 拉服务端数据的间隔（最小 30） |
 | `localRefreshSeconds` | 120 | 跑本地扫描的间隔（最小 30） |
 | `topModels` | 5 | 下拉里列几个模型，0 = 不列 |
 
-在菜单里切过「菜单栏显示排名」之后，记住的选择（`UserDefaults`）优先于 `menuBarRank`。想让 config.json 重新生效：`defaults delete ci.tokens.menubar menuBarRank`。
+在菜单里切过排名或语言之后，记住的选择（`UserDefaults`）优先于 config.json。想让 config 重新生效：`defaults delete ci.tokens.menubar menuBarRank`（语言是 `language`）。
+
+## 检查更新
+
+「检查更新」把当前 bundle 版本和 GitHub 最新 release 比一下。后台每天也会静默查一次，有新版时这个菜单项会变成下载链接。不会自动装任何东西。
 
 ## 命令行
 
 ```bash
-# 把菜单栏那行和整个下拉内容打到终端，用来排查数据链路
-./TokensBar.app/Contents/MacOS/TokensBar --dump
+# 把菜单栏那行、整个下拉、以及两个饼图的明细都打到终端，用来排查数据链路
+./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
+
+# 把环形图离屏渲染成 PNG，用来检查画得对不对
+./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
+
+# 拿当前版本和 GitHub 最新 release 比一下
+./TokensBar.app/Contents/MacOS/TokensBar --check-updates
 
 # 开机启动（装/卸 ~/Library/LaunchAgents/ci.tokens.menubar.plist）
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login on

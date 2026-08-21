@@ -17,39 +17,50 @@ Single-file Swift, compiled straight with `swiftc`. No Xcode project, no depende
 
 ```
 menu bar:  ⚡ 12.4M  #87       ← all-time rank
-     or:   ⚡ 12.4M  今#31     ← today's rank
+     or:   ⚡ 12.4M  D#31      ← today's rank
 
 dropdown:
   @your-handle
   ──────────────────────────────
-  累计榜   #87 / 265  · 菜单栏     (all-time board)
-  今日榜   #31 / 121               (today's board)
-  #rank / people on the board
+  All-time   #87 / 265  · menu bar
+  Today      #31 / 121
+  #rank / people on the board; today counts only today's submitters
   ──────────────────────────────
-  累计   1.82B      $3,410.55     (lifetime)
-  今日   12.4M      $54.30        (today)
-  本周   210.6M     $612.40       (this week)
+  Lifetime   1.82B      $3,410.55     ← click for the donut chart
+  Today      12.4M      $54.30        ← click for the donut chart
+  This week  210.6M     $612.40
+  Click a row above for the model breakdown
   ──────────────────────────────
-  累计榜 距 #86 @someone-ahead 还差 24.3M   (gap to the rank above)
+  All-time · 24.3M behind #86 @someone-ahead
   ──────────────────────────────
   claude-opus-4-8          33.6%  1.36B
   gpt-5.6-sol              28.1%  1.13B
   glm-4.5-flash            14.1%  568.2M
   ──────────────────────────────
-  本地 12:21  ·  服务端 12:06    (local scan / server data timestamps)
-  submit now / refresh / rank shown in menu bar / open profile / launch at login / quit
+  local 12:21  ·  server 12:06
+  Submit Now · Refresh · Rank Shown in Menu Bar · Language
+  Open tokens.ci Profile · Check for Updates… · Launch at Login · Quit
 ```
 
-The interface is currently Chinese-only. Localisation is welcome — every string lives in the `Presenter` type in [`Sources/main.swift`](Sources/main.swift).
+English and 简体中文 are both built in — switch from the Language submenu (English is the default), or set `language` in the config file.
+
+## Model distribution
+
+Clicking the **Lifetime** or **Today** row opens a donut chart of the per-model split, with a Tokens / Cost toggle:
+
+- **Lifetime** comes from the API's `modelUsage`
+- **Today** comes from the local CLI scan, so it is live rather than waiting on the next submission
+
+The top seven models get their own slice and the rest are folded into "Others". The window refreshes in place as new data arrives.
 
 ## The two ranks
 
-- **累计榜 (all-time)** — ranked by lifetime tokens. This is the board on the tokens.ci front page.
+- **All-time** — ranked by lifetime tokens. This is the board on the tokens.ci front page.
 - **今日榜 (today)** — ranked by tokens submitted today only. Just the people who submitted today are on it, so it is a smaller board and the rank moves a lot.
 
-`#87 / 265` reads "rank 87 out of 265 people on the board" — it is **one** rank, not two different ones. In the menu bar a daily rank is prefixed with 今 (`今#31`) so it cannot be mistaken for a lifetime one.
+`#87 / 265` reads "rank 87 out of 265 people on the board" — it is **one** rank, not two different ones. In the menu bar a daily rank is prefixed (`D#31`, 今#31 in Chinese) so it cannot be mistaken for a lifetime one.
 
-Pick which one the menu bar shows from the "菜单栏显示排名" submenu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always listed in the dropdown; the setting only changes the menu bar line and which board the gap line refers to.
+Pick which one the menu bar shows from the "Rank Shown in Menu Bar" submenu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always listed in the dropdown; the setting only changes the menu bar line and which board the gap line refers to.
 
 ## Requirements
 
@@ -92,6 +103,7 @@ Optional, `~/.config/tokens-menubar/config.json`:
 ```json
 {
   "username": "your-github-username",
+  "language": "en",
   "menuBarRank": "all",
   "apiRefreshSeconds": 300,
   "localRefreshSeconds": 120,
@@ -103,26 +115,37 @@ Optional, `~/.config/tokens-menubar/config.json`:
 | --- | --- | --- |
 | `username` | read from `~/.config/tokens/credentials.json` | tokens.ci username |
 | `apiBase` | `https://tokens.ci` | API base URL |
+| `language` | `en` | UI language: `en` or `zh` |
 | `menuBarRank` | `all` | Which rank the menu bar shows: `all` (lifetime) or `today` |
 | `apiRefreshSeconds` | 300 | How often to hit the API (minimum 30) |
 | `localRefreshSeconds` | 120 | How often to run the local scan (minimum 30) |
 | `topModels` | 5 | Models listed in the dropdown, 0 to list none |
 
-Once you switch the rank from the menu, that remembered choice (`UserDefaults`) wins over `menuBarRank`. To hand control back to the config file: `defaults delete ci.tokens.menubar menuBarRank`.
+Switching the rank or the language from the menu stores the choice in `UserDefaults`, which then wins over the config file. To hand control back: `defaults delete ci.tokens.menubar menuBarRank` (or `language`).
+
+## Updates
+
+"Check for Updates…" compares the bundle version against the latest GitHub release. A daily background check runs too; when a newer release exists the menu item turns into a download link. Nothing is ever installed automatically.
 
 ## Command line
 
 ```bash
-# Print the menu bar line and the whole dropdown to stdout — useful for
-# checking the data path (CLI discovery, network, parsing) without the GUI.
-./TokensBar.app/Contents/MacOS/TokensBar --dump
+# Print the menu bar line, the whole dropdown and both chart breakdowns to
+# stdout — useful for checking the data path without the GUI.
+./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
+
+# Render the donut chart offscreen to a PNG, to review the drawing itself.
+./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
+
+# Compare this build against the latest GitHub release.
+./TokensBar.app/Contents/MacOS/TokensBar --check-updates
 
 # Launch at login (installs/removes ~/Library/LaunchAgents/ci.tokens.menubar.plist)
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login on
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login off
 ```
 
-The "开机启动" checkbox in the menu does the same thing as `--set-login`.
+The "Launch at Login" checkbox in the menu does the same thing as `--set-login`.
 
 ## How it works
 
@@ -137,10 +160,10 @@ Details that are easy to get wrong, handled here:
 - `tokens --json` has no top-level `totalReasoning` — reasoning has to be summed from `entries[].reasoning`
 - `modelUsage[].percentage` from the API is a share of **cost**, not tokens (a cheap model can show 0.0% while eating a double-digit share of tokens), so the dropdown recomputes token share locally
 - `GET /api/users/<name>?period=today` **does not work** — it echoes `"period": "all"` regardless, so a daily rank has to come from the daily board listing
-- The dropdown's 今日 (local scan, this machine only) and the daily board rank (server-side, all your devices summed) are not the same number; with several machines on one account the local figure reads low
+- The dropdown's Today (local scan, this machine only) and the daily board rank (server-side, all your devices summed) are not the same number; with several machines on one account the local figure reads low
 - GUI apps do not inherit the shell `PATH`, so the `tokens` binary is probed at `/usr/local/bin` → `/opt/homebrew/bin` → `~/.cargo/bin` → `/usr/bin`
 
-If tokens.ci only works for you through a proxy, note that it sits behind Cloudflare: a shared exit IP can trigger a managed challenge, in which case the endpoints return a 403 challenge page instead of JSON and the dropdown shows 服务端读取失败 (server read failed).
+If tokens.ci only works for you through a proxy, note that it sits behind Cloudflare: a shared exit IP can trigger a managed challenge, in which case the endpoints return a 403 challenge page instead of JSON and the dropdown reports that the server read failed.
 
 ## Credits
 
