@@ -1,0 +1,27 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md"]
+  pull_request:
+    paths-ignore: ["**/*.md"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      # actions/checkout v7.0.1, pinned by commit so the action cannot change under us
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Build universal app
+        run: ./build.sh --universal
+
+      # The app itself needs the tokens CLI and network, neither of which the
+      # runner has, so only check the bundle came out intact.
+      - name: Check bundle
+        run: |
+          lipo -archs TokensBar.app/Contents/MacOS/TokensBar
+          codesign --verify --deep --strict TokensBar.app
+          plutil -lint TokensBar.app/Contents/Info.plist

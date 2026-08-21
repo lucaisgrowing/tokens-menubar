@@ -1,0 +1,53 @@
+name: Release
+
+# Tag a commit and push the tag to cut a release:
+#   git tag v1.1.0 && git push origin v1.1.0
+# Nothing to configure — GITHUB_TOKEN is provided automatically and only
+# needs contents:write to publish. Also runnable by hand from the Actions tab.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach the app to
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: echo "name=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      # actions/checkout v7.0.1, pinned by commit so the action cannot change under us
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Build universal app
+        run: ./build.sh --universal
+
+      - name: Package
+        run: |
+          ditto -c -k --keepParent TokensBar.app TokensBar.app.zip
+          shasum -a 256 TokensBar.app.zip
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" TokensBar.app.zip --clobber
+          else
+            gh release create "$TAG" \
+              --title "TokensBar $TAG" \
+              --generate-notes \
+              TokensBar.app.zip
+          fi
