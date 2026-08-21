@@ -1,0 +1,7 @@
+# Build output
+TokensBar.app/
+*.o
+*.dSYM/
+
+# macOS
+.DS_Store
