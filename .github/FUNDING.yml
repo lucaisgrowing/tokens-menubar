@@ -1,0 +1,3 @@
+# Enables the Sponsor button on the repository. GitHub's `custom` field only
+# takes URLs, so it points at the README section that carries the addresses.
+custom: ["https://github.com/lucaisgrowing/tokens-menubar#support"]

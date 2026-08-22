@@ -156,6 +156,24 @@ Two things worth knowing:
 
 If the API cannot be reached, the dropdown reports that the server read failed and keeps the last figures it had.
 
+## Support
+
+TokensBar is free and stays free. If it saved you a browser tab, USDT tips are welcome on either chain:
+
+| Chain | Address |
+| --- | --- |
+| TRON (TRC20) | `TNKSjygE7JaMSJBPZcYPpWxVPUKrFr8DDU` |
+| Ethereum · BNB Chain · Base (ERC20 / BEP20) | `0x027E4828B67f4c8cAc006A637Cab4f0164F501B8` |
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/qr-tron.png" width="170" alt="TRON TRC20 address QR code"><br><sub>TRON (TRC20)</sub></td>
+    <td align="center"><img src="docs/qr-evm.png" width="170" alt="EVM address QR code"><br><sub>ERC20 / BEP20 / Base</sub></td>
+  </tr>
+</table>
+
+Check the chain before sending — the two addresses are not interchangeable.
+
 ## Credits
 
 TokensBar is only a menu bar front end. All the actual usage accounting is done by:

@@ -154,6 +154,24 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 接口拉不通时，下拉会显示服务端读取失败，并保留上一次拿到的数据。
 
+## 赞助
+
+TokensBar 一直免费。如果它帮你省下了开网页的功夫，欢迎用 USDT 请杯咖啡，两条链都可以：
+
+| 链 | 地址 |
+| --- | --- |
+| TRON（TRC20） | `TNKSjygE7JaMSJBPZcYPpWxVPUKrFr8DDU` |
+| Ethereum · BNB Chain · Base（ERC20 / BEP20） | `0x027E4828B67f4c8cAc006A637Cab4f0164F501B8` |
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/qr-tron.png" width="170" alt="TRON TRC20 收款地址二维码"><br><sub>TRON（TRC20）</sub></td>
+    <td align="center"><img src="docs/qr-evm.png" width="170" alt="EVM 收款地址二维码"><br><sub>ERC20 / BEP20 / Base</sub></td>
+  </tr>
+</table>
+
+转账前先确认链，两个地址不能混用。
+
 ## 引用与致谢
 
 本项目只是给下面这些项目做了个菜单栏前端，核心的用量统计工作都是它们做的：
