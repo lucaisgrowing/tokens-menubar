@@ -97,6 +97,9 @@ enum L10n {
         "heat.activeDays": ("%d active days", "%d 个活跃日"),
         "heat.tokens": ("tokens", "tokens"),
         "heat.messages": ("%@ messages", "%@ 条消息"),
+        "heat.models": ("Models", "模型"),
+        "heat.clients": ("Clients", "客户端"),
+        "heat.cost": ("Cost", "金额"),
         "heat.low": ("Low", "少"),
         "heat.high": ("High", "多"),
 

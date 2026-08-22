@@ -3,6 +3,27 @@
 
 import AppKit
 
+/// What the grid colours by and what the readout breaks down.
+enum ContribMode: Int, CaseIterable {
+    case models
+    case clients
+    case cost
+
+    var titleKey: String {
+        switch self {
+        case .models: return "heat.models"
+        case .clients: return "heat.clients"
+        case .cost: return "heat.cost"
+        }
+    }
+}
+
+struct ContribSlice {
+    let name: String
+    let tokens: Int
+    let cost: Double
+}
+
 struct ContribDay {
     let date: Date
     let tokens: Int
@@ -11,8 +32,16 @@ struct ContribDay {
     /// 0…4 as the API reports it; any day with tokens is lifted to at least 1 so
     /// "a little" never renders as "nothing".
     let level: Int
-    /// Client → tokens, biggest first.
-    let clients: [(name: String, tokens: Int)]
+    /// Per-client and per-model splits, each biggest-first.
+    let clients: [ContribSlice]
+    let models: [ContribSlice]
+
+    func slices(_ mode: ContribMode) -> [ContribSlice] {
+        switch mode {
+        case .clients: return clients
+        case .models, .cost: return models
+        }
+    }
 }
 
 /// One hue, light→dark, so the ramp reads as magnitude. Each mode has its own
@@ -63,7 +92,10 @@ func displayLocale() -> Locale {
 
 final class HeatmapView: NSView {
     /// Days keyed by their GMT midnight, plus the window to render.
-    var days: [Date: ContribDay] = [:] { didSet { needsDisplay = true } }
+    var days: [Date: ContribDay] = [:] {
+        didSet { recomputeCostCuts(); needsDisplay = true }
+    }
+    var mode: ContribMode = .models { didSet { needsDisplay = true } }
     var start = Date() { didSet { needsDisplay = true } }
     var end = Date() { didSet { needsDisplay = true } }
 
@@ -76,6 +108,9 @@ final class HeatmapView: NSView {
     private var pitch: CGFloat { cell + gap }
 
     private var hovered: Date?
+    /// Quartile cut points over the non-zero daily costs, so the cost view has a
+    /// ramp of its own instead of reusing the token intensity.
+    private var costCuts: [Double] = []
     /// Week column → x offset, filled while drawing.
     private var firstColumnMonday = Date()
     private var columns = 0
@@ -85,6 +120,24 @@ final class HeatmapView: NSView {
         let gridWidth = CGFloat(columns) * pitch - gap
         return NSSize(width: padding * 2 + labelColumn + gridWidth,
                       height: padding * 2 + monthRow + 7 * pitch - gap + 10 + readoutHeight)
+    }
+
+    private func recomputeCostCuts() {
+        let costs = days.values.map(\.cost).filter { $0 > 0 }.sorted()
+        guard costs.count >= 4 else { return costCuts = [] }
+        costCuts = [0.25, 0.5, 0.75].map { costs[Int(Double(costs.count - 1) * $0)] }
+    }
+
+    /// Level for a cell: the API's token intensity, or a cost quartile.
+    private func level(_ day: ContribDay?) -> Int {
+        guard let day else { return 0 }
+        guard mode == .cost else { return day.level }
+        guard day.cost > 0 else { return 0 }
+        guard costCuts.count == 3 else { return 2 }
+        if day.cost <= costCuts[0] { return 1 }
+        if day.cost <= costCuts[1] { return 2 }
+        if day.cost <= costCuts[2] { return 3 }
+        return 4
     }
 
     private func recomputeColumns() {
@@ -148,8 +201,7 @@ final class HeatmapView: NSView {
                 let rect = NSRect(x: origin.x + CGFloat(col) * pitch,
                                   y: origin.y - CGFloat(row) * pitch,
                                   width: cell, height: cell)
-                let entry = days[day]
-                heatColor(level: entry?.level ?? 0).setFill()
+                heatColor(level: level(days[day])).setFill()
                 NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
                 if day == hovered {
                     NSColor.labelColor.setStroke()
@@ -243,16 +295,25 @@ final class HeatmapView: NSView {
         f.locale = displayLocale()
         f.timeZone = gridCalendar.timeZone
         f.setLocalizedDateFormatFromTemplate("EEE, MMM d, yyyy")
-        drawText("\(fmtTokens(day.tokens))  \(t("heat.tokens"))",
+        let hero = mode == .cost ? fmtMoney(day.cost)
+                                 : "\(fmtTokens(day.tokens))  \(t("heat.tokens"))"
+        drawText(hero,
                  at: NSRect(x: padding, y: y, width: bounds.width - padding * 2, height: 16),
                  font: .systemFont(ofSize: 13, weight: .semibold),
                  colour: .labelColor, alignment: .left)
 
         // Everything else on one secondary line — the scale legend sits above the
         // right end of this row, so nothing is right-aligned here.
-        var parts = [f.string(from: day.date), fmtMoney(day.cost)]
+        var parts = [f.string(from: day.date)]
+        parts.append(mode == .cost ? fmtTokens(day.tokens) + " tokens" : fmtMoney(day.cost))
         if day.messages > 0 { parts.append(t("heat.messages", fmtExact(day.messages))) }
-        parts += day.clients.prefix(3).map { "\($0.name) \(fmtTokens($0.tokens))" }
+        let top = day.slices(mode)
+            .sorted { mode == .cost ? $0.cost > $1.cost : $0.tokens > $1.tokens }
+            .prefix(3)
+        parts += top.map { slice in
+            let value = mode == .cost ? fmtMoney(slice.cost) : fmtTokens(slice.tokens)
+            return "\(clipDisplay(slice.name, 14)) \(value)"
+        }
         drawText(parts.joined(separator: "  ·  "),
                  at: NSRect(x: padding, y: y - 16, width: bounds.width - padding * 2, height: 14),
                  font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .left)
@@ -281,6 +342,7 @@ final class ContribPopover: NSObject {
     private let popover = NSPopover()
     private let grid = HeatmapView()
     private let heading = NSTextField(labelWithString: "")
+    private var toggle: NSSegmentedControl!
     private var built = false
 
     func show(days: [ContribDay], start: Date, end: Date, from anchor: NSView?) {
@@ -298,8 +360,20 @@ final class ContribPopover: NSObject {
 
     func refreshLanguage() {
         guard built else { return }
-        heading.stringValue = t("heat.title")
+        localise()
         grid.needsDisplay = true
+    }
+
+    private func localise() {
+        heading.stringValue = t("heat.title")
+        for mode in ContribMode.allCases {
+            toggle.setLabel(t(mode.titleKey), forSegment: mode.rawValue)
+        }
+        toggle.sizeToFit()
+    }
+
+    @objc private func modeChanged(_ sender: NSSegmentedControl) {
+        grid.mode = ContribMode(rawValue: sender.selectedSegment) ?? .models
     }
 
     private func load(days: [ContribDay], start: Date, end: Date) {
@@ -307,10 +381,10 @@ final class ContribPopover: NSObject {
                                uniquingKeysWith: { a, _ in a })
         grid.start = start
         grid.end = end
-        heading.stringValue = t("heat.title")
+        localise()
         let size = grid.neededSize
         grid.frame = NSRect(origin: .zero, size: size)
-        popover.contentSize = NSSize(width: size.width, height: size.height + 30)
+        popover.contentSize = NSSize(width: size.width, height: size.height + 40)
     }
 
     private func build() {
@@ -321,13 +395,25 @@ final class ContribPopover: NSObject {
         heading.translatesAutoresizingMaskIntoConstraints = false
         grid.translatesAutoresizingMaskIntoConstraints = false
 
+        let toggle = NSSegmentedControl(
+            labels: ContribMode.allCases.map { t($0.titleKey) },
+            trackingMode: .selectOne, target: self, action: #selector(modeChanged(_:)))
+        toggle.selectedSegment = ContribMode.models.rawValue
+        toggle.segmentStyle = .capsule
+        toggle.controlSize = .small
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+        self.toggle = toggle
+
         let content = NSView()
         content.addSubview(heading)
+        content.addSubview(toggle)
         content.addSubview(grid)
         NSLayoutConstraint.activate([
             heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
-            heading.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
-            grid.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 2),
+            heading.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
+            toggle.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
+            toggle.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
+            grid.topAnchor.constraint(equalTo: toggle.bottomAnchor, constant: 2),
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             grid.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             grid.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -342,9 +428,12 @@ final class ContribPopover: NSObject {
 
     /// Offscreen render for `--contrib-png`, same trick as the chart popover.
     func snapshot(days: [ContribDay], start: Date, end: Date,
-                  dark: Bool = false, hover: Date? = nil) -> Data? {
+                  dark: Bool = false, hover: Date? = nil,
+                  mode: ContribMode = .models) -> Data? {
         build()
         load(days: days, start: start, end: end)
+        grid.mode = mode
+        toggle.selectedSegment = mode.rawValue
         guard let view = popover.contentViewController?.view else { return nil }
         let size = popover.contentSize
         let host = NSWindow(contentRect: NSRect(origin: .zero, size: size),

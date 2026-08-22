@@ -363,19 +363,36 @@ final class API {
                     // with usage must never render as an empty cell.
                     let level = max(int(entry, "intensity"), tokens > 0 ? 1 : 0)
                     var clientMessages = 0
+                    var modelTotals: [String: (tokens: Int, cost: Double)] = [:]
                     let clients = (entry["clients"] as? [[String: Any]] ?? []).compactMap {
-                        c -> (name: String, tokens: Int)? in
+                        c -> ContribSlice? in
                         guard let name = c["client"] as? String else { return nil }
                         clientMessages += int(c, "messages")
+                        // Each client carries its own per-model map; the day's model
+                        // split is those maps merged.
+                        for (model, raw) in (c["models"] as? [String: Any] ?? [:]) {
+                            guard let m = raw as? [String: Any] else { continue }
+                            var e = modelTotals[model] ?? (0, 0)
+                            e.tokens += int(m, "tokens")
+                            e.cost += dbl(m, "cost")
+                            modelTotals[model] = e
+                        }
                         let b = c["tokens"] as? [String: Any]
-                        return (name, int(b, "input") + int(b, "output") + int(b, "cacheRead")
-                            + int(b, "cacheWrite") + int(b, "reasoning"))
+                        return ContribSlice(
+                            name: name,
+                            tokens: int(b, "input") + int(b, "output") + int(b, "cacheRead")
+                                + int(b, "cacheWrite") + int(b, "reasoning"),
+                            cost: dbl(c, "cost"))
                     }
+                    let models = modelTotals
+                        .map { ContribSlice(name: $0.key, tokens: $0.value.tokens, cost: $0.value.cost) }
+                        .sorted { $0.tokens > $1.tokens }
                     return ContribDay(date: date, tokens: tokens,
                                       cost: dbl(totals, "cost"),
                                       messages: max(int(totals, "messages"), clientMessages),
                                       level: level,
-                                      clients: clients.sorted { $0.tokens > $1.tokens })
+                                      clients: clients.sorted { $0.tokens > $1.tokens },
+                                      models: models)
                 }
             let range = o["chartRange"] as? [String: Any]
 
@@ -1163,8 +1180,11 @@ func runContribPNG(path: String) -> Never {
     let args = CommandLine.arguments
     var hover: Date?
     if let i = args.firstIndex(of: "hover"), args.count > i + 1 { hover = parseDay(args[i + 1]) }
+    let mode: ContribMode = args.contains("cost") ? .cost
+        : args.contains("clients") ? .clients : .models
     guard let png = ContribPopover.shared.snapshot(days: s.contribs, start: from, end: to,
-                                                   dark: args.contains("dark"), hover: hover)
+                                                   dark: args.contains("dark"), hover: hover,
+                                                   mode: mode)
     else {
         print("render failed")
         exit(1)

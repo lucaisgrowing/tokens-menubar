@@ -59,6 +59,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
   <img src="docs/contributions.png" width="640" alt="一年的每日 token 活动热力图">
 </p>
 
+右上角的切换决定下方读数按什么拆分：**模型**、**客户端**、**金额**。切到金额时格子的深浅也会跟着变 —— token 的深浅用 API 给的强度，金额的深浅是按每日花费的四分位自己算的，所以「量大但便宜」和「量小但贵」两种日子看起来不一样。
+
 色阶是单一色相由浅到深，浅色和深色模式各一套；只要当天有用量，就不会退回成空格子的颜色。
 
 ## 两个排名
@@ -147,7 +149,8 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
     [today|lifetime] [tokens|cost] [dark] [hover N] [reveal F]
 
 # 把贡献图离屏渲染成 PNG
-./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png [dark] [hover YYYY-MM-DD]
+./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png \
+    [models|clients|cost] [dark] [hover YYYY-MM-DD]
 
 # 拿当前版本和 GitHub 最新 release 比一下
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates

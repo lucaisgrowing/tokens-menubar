@@ -59,6 +59,8 @@ The **Active days** row opens a year of daily token activity as a heat grid, the
   <img src="docs/contributions.png" width="640" alt="A year of daily token activity as a heat grid">
 </p>
 
+The toggle in the corner switches what the readout breaks the day down by — **Models**, **Clients** or **Cost**. Cost also recolours the grid: token intensity comes from the API, while the cost view derives its own levels from the quartiles of the daily spend, so a cheap-but-busy day and an expensive-but-quiet one look different.
+
 The ramp is one hue, light to dark, with separate steps for light and dark mode; days with any usage never fall back to the empty-cell colour.
 
 ## The two ranks
@@ -149,7 +151,8 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
     [today|lifetime] [tokens|cost] [dark] [hover N] [reveal F]
 
 # Render the contributions grid offscreen.
-./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png [dark] [hover YYYY-MM-DD]
+./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png \
+    [models|clients|cost] [dark] [hover YYYY-MM-DD]
 
 # Compare this build against the latest GitHub release.
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
