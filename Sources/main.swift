@@ -130,9 +130,11 @@ func clipDisplay(_ s: String, _ width: Int) -> String {
     return out + "…"
 }
 
-/// One layout for value rows, shared by the menu and `--dump`.
+/// One layout for value rows, shared by the menu and `--dump`. The label column
+/// always keeps at least one space, however long the label is.
 func rowText(_ label: String, _ value: String, _ trailing: String?) -> String {
-    let head = padDisplay(label, 11) + padDisplay(value, 11)
+    let labelWidth = max(12, displayWidth(label) + 1)
+    let head = padDisplay(label, labelWidth) + padDisplay(value, 11)
     guard let trailing else { return head }
     return head + (head.hasSuffix(" ") ? "" : " ") + trailing
 }
@@ -189,6 +191,9 @@ struct ServerStats {
     var models: [ModelSlice]
     var allTime: BoardStanding?
     var today: BoardStanding?
+    var contribs: [ContribDay] = []
+    var contribStart: Date?
+    var contribEnd: Date?
 
     func standing(_ mode: RankMode) -> BoardStanding? {
         mode == .today ? today : allTime
@@ -349,6 +354,31 @@ final class API {
                            tokens: int($0, "tokens"),
                            cost: dbl($0, "cost"))
             }
+            let contribs: [ContribDay] = (o["contributions"] as? [[String: Any]] ?? [])
+                .compactMap { entry in
+                    guard let date = parseDay(entry["date"]) else { return nil }
+                    let totals = entry["totals"] as? [String: Any]
+                    let tokens = int(totals, "tokens")
+                    // The API reports 0 for some days that do have tokens; a day
+                    // with usage must never render as an empty cell.
+                    let level = max(int(entry, "intensity"), tokens > 0 ? 1 : 0)
+                    var clientMessages = 0
+                    let clients = (entry["clients"] as? [[String: Any]] ?? []).compactMap {
+                        c -> (name: String, tokens: Int)? in
+                        guard let name = c["client"] as? String else { return nil }
+                        clientMessages += int(c, "messages")
+                        let b = c["tokens"] as? [String: Any]
+                        return (name, int(b, "input") + int(b, "output") + int(b, "cacheRead")
+                            + int(b, "cacheWrite") + int(b, "reasoning"))
+                    }
+                    return ContribDay(date: date, tokens: tokens,
+                                      cost: dbl(totals, "cost"),
+                                      messages: max(int(totals, "messages"), clientMessages),
+                                      level: level,
+                                      clients: clients.sorted { $0.tokens > $1.tokens })
+                }
+            let range = o["chartRange"] as? [String: Any]
+
             var stats = ServerStats(
                 rank: int(u, "rank"),
                 totalTokens: int(s, "totalTokens"),
@@ -358,7 +388,10 @@ final class API {
                 isStale: (fresh?["isStale"] as? Bool) ?? false,
                 models: models,
                 allTime: nil,
-                today: nil)
+                today: nil,
+                contribs: contribs,
+                contribStart: parseDay(range?["start"]) ?? contribs.first?.date,
+                contribEnd: parseDay(range?["end"]) ?? contribs.last?.date)
 
             // `/api/users/<name>?period=today` ignores the period (it echoes
             // "all"), so a daily rank has to come from the daily board itself.
@@ -460,10 +493,16 @@ enum LoginItem {
 
 // MARK: - Presenter (pure text layer, shared by the menu and `--dump`)
 
+/// What a clickable dropdown row opens.
+enum RowAction: Equatable {
+    case chart(ChartScope)
+    case contributions
+}
+
 enum Line {
     case header(String)
-    /// A non-nil scope makes the row clickable and opens that chart.
-    case row(String, String, String?, ChartScope?)
+    /// A non-nil action makes the row clickable.
+    case row(String, String, String?, RowAction?)
     case note(String)
     case small(String)
     case separator
@@ -532,7 +571,7 @@ struct Presenter {
 
         if let s = server {
             out.append(.row(t("row.lifetime"), fmtTokens(s.totalTokens),
-                            fmtMoney(s.totalCost), .lifetime))
+                            fmtMoney(s.totalCost), .chart(.lifetime)))
         } else if serverFailed {
             out.append(.note(t("state.serverFailed")))
         } else {
@@ -543,9 +582,13 @@ struct Presenter {
             out.append(.note(t("state.localFailed")))
         } else {
             out.append(.row(t("row.today"), fmtTokens(local.todayTokens),
-                            fmtMoney(local.todayCost), .today))
+                            fmtMoney(local.todayCost), .chart(.today)))
             out.append(.row(t("row.week"), fmtTokens(local.weekTokens),
                             fmtMoney(local.weekCost), nil))
+        }
+        if let s = server, !s.contribs.isEmpty {
+            let active = s.contribs.filter { $0.tokens > 0 }.count
+            out.append(.row(t("heat.row"), "\(active)", nil, .contributions))
         }
         out.append(.small(t("chart.hint")))
 
@@ -652,6 +695,9 @@ final class Controller: NSObject, NSMenuDelegate {
             if let models = self.server?.models {
                 ChartPopover.shared.update(scope: .lifetime, data: models.map(Self.datum))
             }
+            if let st = self.server, let from = st.contribStart, let to = st.contribEnd {
+                ContribPopover.shared.update(days: st.contribs, start: from, end: to)
+            }
         }
     }
 
@@ -750,12 +796,15 @@ final class Controller: NSObject, NSMenuDelegate {
                 .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)])
             it.target = self
             return it
-        case .row(let label, let value, let trailing, let scope):
+        case .row(let label, let value, let trailing, let action):
             let text = rowText(label, value, trailing)
-            guard let scope else { return disabledItem(text, font: rowFont, dim: false) }
-            let it = NSMenuItem(title: text, action: #selector(openChart(_:)), keyEquivalent: "")
+            guard let action else { return disabledItem(text, font: rowFont, dim: false) }
+            let it = NSMenuItem(title: text, action: #selector(openRow(_:)), keyEquivalent: "")
             it.attributedTitle = NSAttributedString(string: text, attributes: [.font: rowFont])
-            it.representedObject = scope == .today ? "today" : "lifetime"
+            switch action {
+            case .chart(let scope): it.representedObject = scope == .today ? "today" : "lifetime"
+            case .contributions: it.representedObject = "contributions"
+            }
             it.target = self
             return it
         case .note(let text):
@@ -884,6 +933,7 @@ final class Controller: NSObject, NSMenuDelegate {
         transient = nil
         render()
         ChartPopover.shared.refreshLanguage()
+        ContribPopover.shared.refreshLanguage()
     }
 
     @objc private func setRankMode(_ sender: NSMenuItem) {
@@ -938,12 +988,19 @@ final class Controller: NSObject, NSMenuDelegate {
         checkForUpdates(announce: true)
     }
 
-    @objc private func openChart(_ sender: NSMenuItem) {
-        let isToday = (sender.representedObject as? String) == "today"
-        let scope: ChartScope = isToday ? .today : .lifetime
-        let models = isToday ? local.todayModels : (server?.models ?? [])
-        ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
-                                 from: statusItem.button)
+    @objc private func openRow(_ sender: NSMenuItem) {
+        switch sender.representedObject as? String {
+        case "contributions":
+            guard let s = server, let from = s.contribStart, let to = s.contribEnd else { return }
+            ContribPopover.shared.show(days: s.contribs, start: from, end: to,
+                                       from: statusItem.button)
+        case let which:
+            let isToday = which == "today"
+            let scope: ChartScope = isToday ? .today : .lifetime
+            let models = isToday ? local.todayModels : (server?.models ?? [])
+            ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
+                                     from: statusItem.button)
+        }
     }
 
     @objc private func openProfile() {
@@ -1025,8 +1082,8 @@ func runDump() -> Never {
         switch line {
         case .separator: print("  " + String(repeating: "─", count: 42))
         case .header(let s): print("  " + s)
-        case .row(let l, let v, let tr, let scope):
-            print("  " + rowText(l, v, tr) + (scope == nil ? "" : "   ← clickable"))
+        case .row(let l, let v, let tr, let action):
+            print("  " + rowText(l, v, tr) + (action == nil ? "" : "   ← clickable"))
         case .note(let s), .small(let s): print("  " + s)
         }
     }
@@ -1094,6 +1151,30 @@ func runUpdateCheck() -> Never {
     exit(0)
 }
 
+/// Renders the contributions grid offscreen. `dark` for dark mode, `hover
+/// YYYY-MM-DD` to force a day's readout.
+func runContribPNG(path: String) -> Never {
+    let (config, _, server) = collect()
+    applyLanguage(config)
+    guard let s = server, let from = s.contribStart, let to = s.contribEnd, !s.contribs.isEmpty else {
+        print("no contributions data")
+        exit(1)
+    }
+    let args = CommandLine.arguments
+    var hover: Date?
+    if let i = args.firstIndex(of: "hover"), args.count > i + 1 { hover = parseDay(args[i + 1]) }
+    guard let png = ContribPopover.shared.snapshot(days: s.contribs, start: from, end: to,
+                                                   dark: args.contains("dark"), hover: hover)
+    else {
+        print("render failed")
+        exit(1)
+    }
+    try? png.write(to: URL(fileURLWithPath: path))
+    let active = s.contribs.filter { $0.tokens > 0 }.count
+    print("wrote \(path) (\(s.contribs.count) days, \(active) active)")
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--dump") { runDump() }
 if CommandLine.arguments.contains("--check-updates") { runUpdateCheck() }
 
@@ -1115,6 +1196,10 @@ if CommandLine.arguments.contains("--submit") {
 if let i = CommandLine.arguments.firstIndex(of: "--chart-png"),
    CommandLine.arguments.count > i + 1 {
     runChartPNG(path: CommandLine.arguments[i + 1])
+}
+if let i = CommandLine.arguments.firstIndex(of: "--contrib-png"),
+   CommandLine.arguments.count > i + 1 {
+    runContribPNG(path: CommandLine.arguments[i + 1])
 }
 
 // `--set-login on|off` toggles the LaunchAgent without opening the menu.

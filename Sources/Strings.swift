@@ -92,6 +92,14 @@ enum L10n {
         "chart.hint": ("Click a row above for the model breakdown",
                        "点上面任意一行看模型分布"),
 
+        "heat.title": ("Contributions · daily token activity", "贡献图 · 每日 token 活动"),
+        "heat.row": ("Active days", "活跃天数"),
+        "heat.activeDays": ("%d active days", "%d 个活跃日"),
+        "heat.tokens": ("tokens", "tokens"),
+        "heat.messages": ("%@ messages", "%@ 条消息"),
+        "heat.low": ("Low", "少"),
+        "heat.high": ("High", "多"),
+
         "tooltip.localFailed": ("tokens CLI not found, or the local scan failed",
                                 "找不到 tokens CLI 或本地扫描失败"),
         "tooltip.today": ("%@ tokens today", "今日 %@ tokens"),

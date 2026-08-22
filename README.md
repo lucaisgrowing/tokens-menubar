@@ -51,6 +51,16 @@ The chart draws itself in when the popover opens and when the metric changes. Ho
   <img src="docs/chart-lifetime-cost.png" width="360" alt="Lifetime model distribution by cost">
 </p>
 
+## Contributions
+
+The **Active days** row opens a year of daily token activity as a heat grid, the same view the site carries. Hovering a day reads out its tokens, cost, message count and per-client split; the pointer-free state shows the active-day count and the window covered.
+
+<p align="center">
+  <img src="docs/contributions.png" width="640" alt="A year of daily token activity as a heat grid">
+</p>
+
+The ramp is one hue, light to dark, with separate steps for light and dark mode; days with any usage never fall back to the empty-cell colour.
+
 ## The two ranks
 
 - **All-time** — ranked by lifetime tokens. This is the board on the tokens.ci front page.
@@ -137,6 +147,9 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # freezes the draw-in animation at progress F.
 ./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png \
     [today|lifetime] [tokens|cost] [dark] [hover N] [reveal F]
+
+# Render the contributions grid offscreen.
+./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png [dark] [hover YYYY-MM-DD]
 
 # Compare this build against the latest GitHub release.
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates

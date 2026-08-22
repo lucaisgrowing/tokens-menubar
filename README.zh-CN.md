@@ -51,6 +51,16 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
   <img src="docs/chart-lifetime-cost.png" width="360" alt="累计模型分布（按费用）">
 </p>
 
+## 贡献图
+
+下拉里的**活跃天数**那一行，点开是一年的每日 token 活动热力图，跟网站上那块是同一个视图。悬停某一天会读出当天的 token、花费、消息条数和各客户端占比；没悬停时显示活跃天数和统计区间。
+
+<p align="center">
+  <img src="docs/contributions.png" width="640" alt="一年的每日 token 活动热力图">
+</p>
+
+色阶是单一色相由浅到深，浅色和深色模式各一套；只要当天有用量，就不会退回成空格子的颜色。
+
 ## 两个排名
 
 - **累计榜** —— 历史总量的排名，也就是 tokens.ci 首页那个榜
@@ -135,6 +145,9 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 # dark = 深色模式，hover N = 第 N 块的悬停态，reveal F = 把画入动效冻结在进度 F
 ./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png \
     [today|lifetime] [tokens|cost] [dark] [hover N] [reveal F]
+
+# 把贡献图离屏渲染成 PNG
+./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png [dark] [hover YYYY-MM-DD]
 
 # 拿当前版本和 GitHub 最新 release 比一下
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates

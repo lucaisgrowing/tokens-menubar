@@ -60,7 +60,7 @@ private let seriesHexLight = ["2a78d6", "eb6834", "1baf7a", "eda100", "e87ba4",
 private let seriesHexDark = ["3987e5", "d95926", "199e70", "c98500", "d55181",
                              "008300", "9085e9", "e66767"]
 
-private func colorFrom(hex: String) -> NSColor {
+func colorFrom(hex: String) -> NSColor {
     var v: UInt64 = 0
     Scanner(string: hex).scanHexInt64(&v)
     return NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
