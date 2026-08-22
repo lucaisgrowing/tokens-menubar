@@ -4,18 +4,22 @@
 </div>
 
 <p align="center">
-  <img src="docs/icon.png" width="128" alt="TokensBar icon">
+  <img src="docs/icon.png" width="112" alt="TokensBar icon">
 </p>
 
-# TokensBar
+<h1 align="center">TokensBar</h1>
 
-在 macOS 菜单栏上看 [tokens.ci](https://tokens.ci) 的 token 用量和排名，不用再开网页。
+<p align="center">
+  在 macOS 菜单栏上看 <a href="https://tokens.ci">tokens.ci</a> 的 token 用量和排名，不用再开网页。
+</p>
 
-[![Build](https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml/badge.svg)](https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/lucaisgrowing/tokens-menubar?style=flat-square)](https://github.com/lucaisgrowing/tokens-menubar/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square)
-![Universal](https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square)
+<p align="center">
+  <a href="https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml"><img src="https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/lucaisgrowing/tokens-menubar/releases/latest"><img src="https://img.shields.io/github/v/release/lucaisgrowing/tokens-menubar?style=flat-square" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square" alt="Universal">
+</p>
 
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
@@ -37,7 +41,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 - **累计**用 API 的 `modelUsage`
 - **今日**用本地 CLI 扫描的结果，所以是实时的，不用等下一次提交
 
-前 7 个模型各占一块，剩下的折进「其他」。数据刷新时面板会原地更新，不用重新打开。
+前 5 个模型各占一块，其余折进「其他」—— 环形图超过 6 块就不好读了。只有一两个模型时会改画成一条 100% 的横条。浅色和深色模式各用一套配色，分别按各自背景做过对比度和色盲可分辨性校验。
 
 <p align="center">
   <img src="docs/chart-today-tokens.png" width="360" alt="今日模型分布（按 token）">

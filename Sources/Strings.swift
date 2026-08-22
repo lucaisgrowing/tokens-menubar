@@ -69,6 +69,7 @@ enum L10n {
         "action.openProfile": ("Open tokens.ci Profile", "打开 tokens.ci 主页"),
         "action.launchAtLogin": ("Launch at Login", "开机启动"),
         "action.checkUpdates": ("Check for Updates…", "检查更新"),
+        "action.support": ("Buy Me a Coffee…", "请我喝杯咖啡…"),
         "action.language": ("Language", "语言"),
         "action.quit": ("Quit TokensBar", "退出 TokensBar"),
 

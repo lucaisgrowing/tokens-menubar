@@ -27,8 +27,9 @@ struct ChartDatum {
 }
 
 /// Aggregates per-model rows, sorts by the chosen metric and folds the tail into
-/// one "Others" slice so the legend stays readable.
-func chartSlices(_ data: [ChartDatum], metric: ChartMetric, keep: Int = 7) -> [ChartDatum] {
+/// one "Others" slice. A donut is only legible as part-to-whole at a glance, so
+/// the segment count is capped at six.
+func chartSlices(_ data: [ChartDatum], metric: ChartMetric, keep: Int = 5) -> [ChartDatum] {
     var merged: [String: (tokens: Int, cost: Double)] = [:]
     for d in data {
         var e = merged[d.label] ?? (0, 0)
@@ -49,16 +50,31 @@ func chartSlices(_ data: [ChartDatum], metric: ChartMetric, keep: Int = 7) -> [C
     return head + [others]
 }
 
-let chartPalette: [NSColor] = [
-    NSColor(srgbRed: 0.20, green: 0.55, blue: 0.98, alpha: 1),
-    NSColor(srgbRed: 0.24, green: 0.80, blue: 0.44, alpha: 1),
-    NSColor(srgbRed: 0.98, green: 0.68, blue: 0.15, alpha: 1),
-    NSColor(srgbRed: 0.95, green: 0.35, blue: 0.30, alpha: 1),
-    NSColor(srgbRed: 0.64, green: 0.42, blue: 0.96, alpha: 1),
-    NSColor(srgbRed: 0.96, green: 0.40, blue: 0.66, alpha: 1),
-    NSColor(srgbRed: 0.20, green: 0.76, blue: 0.79, alpha: 1),
-    NSColor(srgbRed: 0.62, green: 0.62, blue: 0.64, alpha: 1),
-]
+/// Categorical slots in a fixed order — the order itself is the colour-blind
+/// safety mechanism, so slots are assigned by entity and never cycled or
+/// re-ranked. Each slot carries a step for the light surface and one stepped for
+/// the dark surface; both sets are validated against their own surface rather
+/// than one being an automatic flip of the other.
+private let seriesHexLight = ["2a78d6", "eb6834", "1baf7a", "eda100", "e87ba4",
+                              "008300", "4a3aa7", "e34948"]
+private let seriesHexDark = ["3987e5", "d95926", "199e70", "c98500", "d55181",
+                             "008300", "9085e9", "e66767"]
+
+private func colorFrom(hex: String) -> NSColor {
+    var v: UInt64 = 0
+    Scanner(string: hex).scanHexInt64(&v)
+    return NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
+                   green: CGFloat((v >> 8) & 0xFF) / 255,
+                   blue: CGFloat(v & 0xFF) / 255,
+                   alpha: 1)
+}
+
+let chartPalette: [NSColor] = (0..<seriesHexLight.count).map { slot in
+    NSColor(name: NSColor.Name("tokensbar.series.\(slot)")) { appearance in
+        let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return colorFrom(hex: dark ? seriesHexDark[slot] : seriesHexLight[slot])
+    }
+}
 
 final class ChartView: NSView {
     var slices: [ChartDatum] = [] { didSet { needsDisplay = true } }
@@ -68,10 +84,16 @@ final class ChartView: NSView {
     private let ringWidth: CGFloat = 26
     private let rowHeight: CGFloat = 22
     private let padding: CGFloat = 18
+    private let barHeight: CGFloat = 26
+
+    /// A donut needs enough segments to read as part-to-whole; with one or two it
+    /// is just a pie chart of nothing. Those cases get a single 100% bar instead.
+    private var usesBar: Bool { slices.count <= 2 }
 
     /// Height this view needs for the current slice count.
     var fittingHeight: CGFloat {
-        padding + donutDiameter + 16 + CGFloat(max(slices.count, 1)) * rowHeight + padding
+        let plot = usesBar ? 38 + barHeight + 20 : donutDiameter + 16
+        return padding + plot + CGFloat(max(slices.count, 1)) * rowHeight + padding
     }
 
     private func fmt(_ d: ChartDatum) -> String {
@@ -79,11 +101,7 @@ final class ChartView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.clear.set()
-        dirtyRect.fill()
-
         let total = slices.reduce(0.0) { $0 + $1.value(metric) }
-        let centre = CGPoint(x: bounds.midX, y: bounds.maxY - padding - donutDiameter / 2)
 
         guard total > 0 else {
             drawCentred(t("chart.noData"), at: CGPoint(x: bounds.midX, y: bounds.midY),
@@ -91,36 +109,76 @@ final class ChartView: NSView {
             return
         }
 
-        drawDonut(total: total, centre: centre)
-        drawCentreLabel(total: total, centre: centre)
+        var legendTop: CGFloat
+        if usesBar {
+            let caption = metric == .cost ? t("chart.estimated") : t("chart.total")
+            let value = metric == .tokens ? fmtTokens(Int(total)) : fmtMoney(total)
+            draw(caption, at: NSRect(x: padding, y: bounds.maxY - padding - 14,
+                                    width: bounds.width, height: 14),
+                 font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .left)
+            draw(value, at: NSRect(x: padding, y: bounds.maxY - padding - 34,
+                                   width: bounds.width - padding * 2, height: 22),
+                 font: .systemFont(ofSize: 21, weight: .semibold),
+                 colour: .labelColor, alignment: .left)
+            let bar = NSRect(x: padding, y: bounds.maxY - padding - 34 - barHeight - 4,
+                             width: bounds.width - padding * 2, height: barHeight)
+            drawSplitBar(total: total, in: bar)
+            legendTop = bar.minY - 20
+        } else {
+            let centre = CGPoint(x: bounds.midX, y: bounds.maxY - padding - donutDiameter / 2)
+            drawDonut(total: total, centre: centre)
+            drawCentreLabel(total: total, centre: centre)
+            legendTop = centre.y - donutDiameter / 2 - 20
+        }
 
-        var y = centre.y - donutDiameter / 2 - 20
         for (i, slice) in slices.enumerated() {
             drawLegendRow(slice, colour: chartPalette[i % chartPalette.count],
-                          share: slice.value(metric) / total, y: y)
-            y -= rowHeight
+                          share: slice.value(metric) / total, y: legendTop)
+            legendTop -= rowHeight
         }
+    }
+
+    /// One 100% bar: rounded outer ends, 2px surface gaps between segments.
+    private func drawSplitBar(total: Double, in rect: NSRect) {
+        guard let cg = NSGraphicsContext.current?.cgContext else { return }
+        let gap: CGFloat = 2
+        let radius: CGFloat = 4
+        cg.saveGState()
+        let clip = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+        clip.addClip()
+        var x = rect.minX
+        for (i, slice) in slices.enumerated() {
+            let share = CGFloat(slice.value(metric) / total)
+            let full = share * rect.width
+            let isLast = i == slices.count - 1
+            let w = isLast ? rect.maxX - x : max(full - gap, 1)
+            chartPalette[i % chartPalette.count].setFill()
+            NSRect(x: x, y: rect.minY, width: w, height: rect.height).fill()
+            x += full
+        }
+        cg.restoreGState()
     }
 
     private func drawDonut(total: Double, centre: CGPoint) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         let radius = (donutDiameter - ringWidth) / 2
+        // A 2px gap in the surface separates touching segments — no track behind
+        // them and no stroked border, so the gap is the popover material itself.
+        let gap = 2 / radius // radians subtending 2px at the ring
         cg.saveGState()
         cg.setLineWidth(ringWidth)
         cg.setLineCap(.butt)
 
-        // Track behind the ring, so tiny slices still read as part of a whole.
-        cg.setStrokeColor(NSColor.quaternaryLabelColor.cgColor)
-        cg.addArc(center: centre, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: false)
-        cg.strokePath()
-
-        var start = CGFloat.pi / 2 // 12 o'clock
+        var start = CGFloat.pi / 2 // 12 o'clock, clockwise
         for (i, slice) in slices.enumerated() {
-            let sweep = CGFloat(slice.value(metric) / total) * .pi * 2
-            guard sweep > 0 else { continue }
+            let share = CGFloat(slice.value(metric) / total)
+            let sweep = share * .pi * 2
+            // Keep a hairline of every non-zero slice visible after the gap.
+            let drawn = max(sweep - gap, gap)
             cg.setStrokeColor(chartPalette[i % chartPalette.count].cgColor)
             cg.addArc(center: centre, radius: radius,
-                      startAngle: start, endAngle: start - sweep, clockwise: true)
+                      startAngle: start - gap / 2, endAngle: start - gap / 2 - drawn,
+                      clockwise: true)
             cg.strokePath()
             start -= sweep
         }
@@ -130,10 +188,11 @@ final class ChartView: NSView {
     private func drawCentreLabel(total: Double, centre: CGPoint) {
         let caption = metric == .cost ? t("chart.estimated") : t("chart.total")
         let value = metric == .tokens ? fmtTokens(Int(total)) : fmtMoney(total)
-        drawCentred(caption, at: CGPoint(x: centre.x, y: centre.y + 12),
+        drawCentred(caption, at: CGPoint(x: centre.x, y: centre.y + 13),
                     font: .systemFont(ofSize: 11), color: .secondaryLabelColor)
-        drawCentred(value, at: CGPoint(x: centre.x, y: centre.y - 12),
-                    font: .monospacedDigitSystemFont(ofSize: 19, weight: .semibold),
+        // A standalone hero figure reads better in proportional figures.
+        drawCentred(value, at: CGPoint(x: centre.x, y: centre.y - 11),
+                    font: .systemFont(ofSize: 21, weight: .semibold),
                     color: .labelColor)
     }
 
@@ -142,17 +201,19 @@ final class ChartView: NSView {
         colour.setFill()
         NSBezierPath(ovalIn: dot).fill()
 
-        let nameFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-        let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        let percentX = bounds.maxX - padding - 46
-        let valueX = percentX - 76
+        // Names in the UI sans; the numeric columns get tabular figures so they
+        // line up. Text always wears ink colours, never the series colour.
+        let nameFont = NSFont.systemFont(ofSize: 12)
+        let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        let percentX = bounds.maxX - padding - 44
+        let valueX = percentX - 78
 
-        draw(slice.label, at: NSRect(x: padding + 16, y: y, width: valueX - padding - 22, height: 16),
+        draw(slice.label, at: NSRect(x: padding + 17, y: y, width: valueX - padding - 23, height: 16),
              font: nameFont, colour: .labelColor, alignment: .left)
-        draw(fmt(slice), at: NSRect(x: valueX, y: y, width: 72, height: 16),
+        draw(fmt(slice), at: NSRect(x: valueX, y: y, width: 74, height: 16),
              font: numberFont, colour: .labelColor, alignment: .right)
         draw(String(format: "%.1f%%", share * 100),
-             at: NSRect(x: percentX, y: y, width: 46, height: 16),
+             at: NSRect(x: percentX, y: y, width: 44, height: 16),
              font: numberFont, colour: .secondaryLabelColor, alignment: .right)
     }
 
@@ -281,7 +342,9 @@ final class ChartPopover: NSObject {
     /// real layout (heading and toggle included) rather than the chart alone.
     /// The content is hosted in an offscreen window: NSControls only draw
     /// properly inside one, and it also gets the display's native pixel density.
-    func snapshot(scope: ChartScope, data: [ChartDatum], metric: ChartMetric) -> Data? {
+    /// `dark` renders the dark-mode steps of the palette.
+    func snapshot(scope: ChartScope, data: [ChartDatum], metric: ChartMetric,
+                  dark: Bool = false) -> Data? {
         self.scope = scope
         self.data = data
         self.metric = metric
@@ -295,13 +358,19 @@ final class ChartPopover: NSObject {
         let host = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                             styleMask: [.borderless], backing: .buffered, defer: false)
         host.isReleasedWhenClosed = false
+        host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         host.contentView = view
         view.frame = NSRect(origin: .zero, size: size)
+        // The popover supplies its own material at runtime; stand in the surface
+        // the palette was validated against so the PNG is not transparent.
+        view.wantsLayer = true
+        view.layer?.backgroundColor = colorFrom(hex: dark ? "2a2a2a" : "ececec").cgColor
         view.layoutSubtreeIfNeeded()
         view.display()
 
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
+        view.layer?.backgroundColor = nil
         host.contentView = nil // hand the view back to the popover
         popover.contentViewController?.view = view
         return rep.representation(using: .png, properties: [:])

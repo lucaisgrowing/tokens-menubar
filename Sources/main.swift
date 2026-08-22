@@ -22,6 +22,8 @@ struct Config {
     var apiRefreshSeconds: TimeInterval = 300
     var localRefreshSeconds: TimeInterval = 120
     var topModels = 5
+    /// Where the "Buy Me a Coffee" item points.
+    var supportURL = "https://github.com/lucaisgrowing/tokens-menubar#support"
     /// Which rank the menu bar shows by default; the menu can override it.
     var menuBarRank: RankMode = .allTime
     /// Initial UI language; the menu can override it.
@@ -46,6 +48,7 @@ struct Config {
         if let v = (o["topModels"] as? NSNumber)?.intValue, v >= 0 { cfg.topModels = v }
         if let v = o["menuBarRank"] as? String, let m = RankMode(rawValue: v) { cfg.menuBarRank = m }
         if let v = o["language"] as? String, let l = Lang(rawValue: v) { cfg.language = l }
+        if let v = o["supportURL"] as? String, !v.isEmpty { cfg.supportURL = v }
         return cfg
     }
 
@@ -779,41 +782,51 @@ final class Controller: NSObject, NSMenuDelegate {
         addFooter()
     }
 
+    /// Action rows carry an SF Symbol so the menu reads as a list of verbs
+    /// rather than a wall of text.
+    private func actionItem(_ title: String, symbol: String, action: Selector,
+                            key: String = "") -> NSMenuItem {
+        let it = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        it.target = self
+        it.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        return it
+    }
+
     private func addFooter() {
         menu.addItem(.separator())
 
-        let submit = NSMenuItem(title: busy ? t("action.submitting") : t("action.submit"),
-                                action: #selector(submitNow), keyEquivalent: "s")
-        submit.target = self
+        let submit = actionItem(busy ? t("action.submitting") : t("action.submit"),
+                               symbol: "arrow.up.circle", action: #selector(submitNow), key: "s")
         submit.isEnabled = !busy && CLI.binary() != nil
         menu.addItem(submit)
 
-        let refresh = NSMenuItem(title: t("action.refresh"), action: #selector(refreshAll), keyEquivalent: "r")
-        refresh.target = self
-        menu.addItem(refresh)
+        menu.addItem(actionItem(t("action.refresh"), symbol: "arrow.clockwise",
+                                action: #selector(refreshAll), key: "r"))
 
         menu.addItem(rankModeItem())
         menu.addItem(languageItem())
 
-        let profile = NSMenuItem(title: t("action.openProfile"), action: #selector(openProfile), keyEquivalent: "o")
-        profile.target = self
-        menu.addItem(profile)
+        menu.addItem(actionItem(t("action.openProfile"), symbol: "person.crop.circle",
+                                action: #selector(openProfile), key: "o"))
 
-        let updates = NSMenuItem(title: updateItemTitle(),
-                                 action: #selector(updateItemClicked), keyEquivalent: "u")
-        updates.target = self
+        let updateWaiting = update?.isNewer == true
+        let updates = actionItem(updateItemTitle(),
+                                 symbol: updateWaiting ? "arrow.down.circle.fill" : "arrow.down.circle",
+                                 action: #selector(updateItemClicked), key: "u")
         updates.isEnabled = !checkingUpdate
         menu.addItem(updates)
 
-        let login = NSMenuItem(title: t("action.launchAtLogin"), action: #selector(toggleLoginItem), keyEquivalent: "")
-        login.target = self
+        menu.addItem(actionItem(t("action.support"), symbol: "cup.and.saucer.fill",
+                                action: #selector(openSupport)))
+
+        let login = actionItem(t("action.launchAtLogin"), symbol: "power",
+                               action: #selector(toggleLoginItem))
         login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: t("action.quit"), action: #selector(quit), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
+        menu.addItem(actionItem(t("action.quit"), symbol: "xmark.circle",
+                                action: #selector(quit), key: "q"))
     }
 
     private func updateItemTitle() -> String {
@@ -938,6 +951,11 @@ final class Controller: NSObject, NSMenuDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    @objc private func openSupport() {
+        guard let url = URL(string: config.supportURL) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     @objc private func toggleLoginItem() {
         LoginItem.set(!LoginItem.isEnabled)
         render()
@@ -1040,8 +1058,10 @@ func runChartPNG(path: String) -> Never {
     let metric: ChartMetric = args.contains("cost") ? .cost : .tokens
     let models = scope == .today ? local.todayModels : (server?.models ?? [])
     let data = models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) }
+    let dark = args.contains("dark")
 
-    guard let png = ChartPopover.shared.snapshot(scope: scope, data: data, metric: metric) else {
+    guard let png = ChartPopover.shared.snapshot(scope: scope, data: data, metric: metric,
+                                                 dark: dark) else {
         print("render failed")
         exit(1)
     }

@@ -4,18 +4,22 @@
 </div>
 
 <p align="center">
-  <img src="docs/icon.png" width="128" alt="TokensBar icon">
+  <img src="docs/icon.png" width="112" alt="TokensBar icon">
 </p>
 
-# TokensBar
+<h1 align="center">TokensBar</h1>
 
-Your [tokens.ci](https://tokens.ci) token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
+<p align="center">
+  Your <a href="https://tokens.ci">tokens.ci</a> token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
+</p>
 
-[![Build](https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml/badge.svg)](https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/lucaisgrowing/tokens-menubar?style=flat-square)](https://github.com/lucaisgrowing/tokens-menubar/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square)
-![Universal](https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square)
+<p align="center">
+  <a href="https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml"><img src="https://github.com/lucaisgrowing/tokens-menubar/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/lucaisgrowing/tokens-menubar/releases/latest"><img src="https://img.shields.io/github/v/release/lucaisgrowing/tokens-menubar?style=flat-square" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/binary-arm64%20%2B%20x86__64-lightgrey?style=flat-square" alt="Universal">
+</p>
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
@@ -37,7 +41,7 @@ Clicking the **Lifetime** or **Today** row opens a popover under the menu bar ic
 - **Lifetime** comes from the API's `modelUsage`
 - **Today** comes from the local CLI scan, so it is live rather than waiting on the next submission
 
-The top seven models get their own slice and the rest are folded into "Others". The popover refreshes in place as new data arrives.
+The top five models get their own slice and the rest fold into "Others" — a donut stops being readable much past six segments. With one or two models it draws a single 100% bar instead. Light and dark mode each get their own colour steps, chosen for contrast against that surface and checked for colour-blind separation.
 
 <p align="center">
   <img src="docs/chart-today-tokens.png" width="360" alt="Today's model distribution by tokens">
