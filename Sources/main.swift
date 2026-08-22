@@ -235,9 +235,14 @@ enum CLI {
         candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    /// Runs the CLI and returns (stdout, exitCode). stderr is drained on a
-    /// separate queue so a chatty CLI cannot deadlock the pipe.
-    static func run(_ args: [String], timeout: TimeInterval = 120) -> (Data, Int32)? {
+    /// Runs the CLI and returns its output and exit code. stderr is captured on
+    /// a separate queue so a chatty CLI cannot deadlock the pipe.
+    ///
+    /// Note the flag order the CLI wants: global options such as `--no-spinner`
+    /// and `--json` are rejected after a subcommand, so they go before it —
+    /// `tokens --no-spinner submit`, not `tokens submit --no-spinner`.
+    static func run(_ args: [String], timeout: TimeInterval = 120)
+        -> (out: Data, err: Data, status: Int32)? {
         guard let bin = binary() else { return nil }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: bin)
@@ -248,8 +253,12 @@ enum CLI {
         p.standardInput = FileHandle.nullDevice
         do { try p.run() } catch { return nil }
 
+        let errData = DispatchGroup()
+        var captured = Data()
+        errData.enter()
         DispatchQueue.global(qos: .utility).async {
-            _ = try? err.fileHandleForReading.readToEnd()
+            captured = (try? err.fileHandleForReading.readToEnd()) ?? Data()
+            errData.leave()
         }
         let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: killer)
@@ -257,15 +266,24 @@ enum CLI {
         let data = (try? out.fileHandleForReading.readToEnd()) ?? Data()
         p.waitUntilExit()
         killer.cancel()
-        return (data, p.terminationStatus)
+        errData.wait()
+        return (data, captured, p.terminationStatus)
+    }
+
+    /// First meaningful line of a failed run, for surfacing in the menu.
+    static func firstLine(_ data: Data) -> String? {
+        String(data: data, encoding: .utf8)?
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
     }
 
     /// `tokens --json` totals: the site counts input+output+cacheRead+cacheWrite+reasoning.
     /// reasoning has no top-level total, so it is summed from the entries. The
     /// entries also carry the per-model split used by the chart.
     static func report(_ extraArgs: [String]) -> (tokens: Int, cost: Double, models: [ModelSlice])? {
-        guard let (data, status) = run(extraArgs + ["--json", "--no-spinner"]), status == 0,
-              let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let r = run(["--json", "--no-spinner"] + extraArgs), r.status == 0,
+              let o = try? JSONSerialization.jsonObject(with: r.out) as? [String: Any]
         else { return nil }
         let entries = o["entries"] as? [[String: Any]] ?? []
         let reasoning = entries.reduce(0) { $0 + int($1, "reasoning") }
@@ -875,13 +893,19 @@ final class Controller: NSObject, NSMenuDelegate {
         transient = t("action.submitting")
         render()
         workQueue.async { [weak self] in
-            let result = CLI.run(["submit", "--no-spinner"], timeout: 300)
+            // Global flags must precede the subcommand; `submit --no-spinner`
+            // is rejected by the CLI outright.
+            let result = CLI.run(["--no-spinner", "submit"], timeout: 300)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.busy = false
-                let ok = result?.1 == 0
-                self.transient = ok ? t("action.submitted", fmtClock(Date()))
-                                    : t("action.submitFailed", fmtClock(Date()))
+                if let result, result.status == 0 {
+                    self.transient = t("action.submitted", fmtClock(Date()))
+                } else {
+                    let reason = result.flatMap { CLI.firstLine($0.err) ?? CLI.firstLine($0.out) }
+                    self.transient = t("action.submitFailed", fmtClock(Date()))
+                        + (reason.map { " — " + clipDisplay($0, 48) } ?? "")
+                }
                 self.render()
                 // Server-side aggregation lags a moment behind the POST.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.refreshServer() }
@@ -1043,6 +1067,22 @@ func runUpdateCheck() -> Never {
 
 if CommandLine.arguments.contains("--dump") { runDump() }
 if CommandLine.arguments.contains("--check-updates") { runUpdateCheck() }
+
+/// Runs the same submit the menu item runs, through the same wrapper, so a
+/// failure can be reproduced from a terminal. Add `--dry-run` to send nothing.
+if CommandLine.arguments.contains("--submit") {
+    let dry = CommandLine.arguments.contains("--dry-run")
+    let args = ["--no-spinner", "submit"] + (dry ? ["--dry-run"] : [])
+    print("running: tokens " + args.joined(separator: " "))
+    guard let r = CLI.run(args, timeout: 300) else {
+        print("tokens CLI not found in \(CLI.candidates.joined(separator: ", "))")
+        exit(1)
+    }
+    print("exit: \(r.status)")
+    if let line = CLI.firstLine(r.out) { print("stdout: \(line)") }
+    if let line = CLI.firstLine(r.err) { print("stderr: \(line)") }
+    exit(r.status == 0 ? 0 : 1)
+}
 if let i = CommandLine.arguments.firstIndex(of: "--chart-png"),
    CommandLine.arguments.count > i + 1 {
     runChartPNG(path: CommandLine.arguments[i + 1])

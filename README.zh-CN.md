@@ -130,6 +130,9 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 # 拿当前版本和 GitHub 最新 release 比一下
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
 
+# 跑菜单里「立即提交」走的同一条路径，便于在终端复现失败；加 --dry-run 则不真的上报
+./TokensBar.app/Contents/MacOS/TokensBar --submit [--dry-run]
+
 # 开机启动（装/卸 ~/Library/LaunchAgents/ci.tokens.menubar.plist）
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login on
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login off

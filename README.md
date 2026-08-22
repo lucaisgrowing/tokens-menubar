@@ -131,6 +131,10 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # Compare this build against the latest GitHub release.
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
 
+# Run the same submit the menu item runs, to reproduce a failure in a terminal.
+# Add --dry-run to send nothing.
+./TokensBar.app/Contents/MacOS/TokensBar --submit [--dry-run]
+
 # Launch at login (installs/removes ~/Library/LaunchAgents/ci.tokens.menubar.plist)
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login on
 ./TokensBar.app/Contents/MacOS/TokensBar --set-login off
