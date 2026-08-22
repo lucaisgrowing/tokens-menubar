@@ -24,7 +24,8 @@
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
 <p align="center">
-  <img src="docs/menu.png" width="460" alt="TokensBar 下拉菜单">
+  <img src="docs/menu.png" width="380" alt="TokensBar 下拉菜单（浅色）">
+  <img src="docs/menu-dark.png" width="380" alt="TokensBar 下拉菜单（深色）">
 </p>
 
 ```

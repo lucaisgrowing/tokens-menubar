@@ -839,6 +839,7 @@ final class Controller: NSObject, NSMenuDelegate {
     /// inline so the choice is obvious.
     private func rankModeItem() -> NSMenuItem {
         let parent = NSMenuItem(title: t("action.rankMode"), action: nil, keyEquivalent: "")
+        parent.image = NSImage(systemSymbolName: "list.number", accessibilityDescription: nil)
         let sub = NSMenu()
         for mode in [RankMode.allTime, .today] {
             let st = server?.standing(mode)
@@ -861,6 +862,7 @@ final class Controller: NSObject, NSMenuDelegate {
 
     private func languageItem() -> NSMenuItem {
         let parent = NSMenuItem(title: t("action.language"), action: nil, keyEquivalent: "")
+        parent.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
         let sub = NSMenu()
         for lang in Lang.allCases {
             let it = NSMenuItem(title: lang.displayName,

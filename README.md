@@ -24,7 +24,8 @@
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
 <p align="center">
-  <img src="docs/menu.png" width="460" alt="The TokensBar dropdown">
+  <img src="docs/menu.png" width="380" alt="The TokensBar dropdown in light mode">
+  <img src="docs/menu-dark.png" width="380" alt="The TokensBar dropdown in dark mode">
 </p>
 
 ```
