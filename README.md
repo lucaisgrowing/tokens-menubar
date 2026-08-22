@@ -44,6 +44,8 @@ Clicking the **Lifetime** or **Today** row opens a popover under the menu bar ic
 
 The top five models get their own slice and the rest fold into "Others" — a donut stops being readable much past six segments. With one or two models it draws a single 100% bar instead. Light and dark mode each get their own colour steps, chosen for contrast against that surface and checked for colour-blind separation.
 
+The chart draws itself in when the popover opens and when the metric changes. Hovering a segment — or its legend row — highlights both, dims the rest, and swaps the centre readout to that model's own figure, so the value leads and the name follows.
+
 <p align="center">
   <img src="docs/chart-today-tokens.png" width="360" alt="Today's model distribution by tokens">
   <img src="docs/chart-lifetime-cost.png" width="360" alt="Lifetime model distribution by cost">
@@ -131,7 +133,10 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 ./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
 
 # Render the chart popover offscreen to a PNG, to preview the layout.
-./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
+# `dark` renders dark mode, `hover N` the highlight for slice N, `reveal F`
+# freezes the draw-in animation at progress F.
+./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png \
+    [today|lifetime] [tokens|cost] [dark] [hover N] [reveal F]
 
 # Compare this build against the latest GitHub release.
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates

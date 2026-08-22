@@ -85,6 +85,33 @@ final class ChartView: NSView {
     private let rowHeight: CGFloat = 22
     private let padding: CGFloat = 18
     private let barHeight: CGFloat = 26
+    /// Hit areas extend past the painted pixels — a 2px gap is not a target.
+    private let hitSlop: CGFloat = 7
+
+    /// Geometry recorded while drawing, so hit-testing uses the same numbers.
+    private var legendRects: [NSRect] = []
+    private var donutCentre = CGPoint.zero
+    private var donutRadius: CGFloat = 0
+    private var barRect = NSRect.zero
+
+    private var hovered: Int? {
+        didSet { if oldValue != hovered { needsDisplay = true } }
+    }
+
+    /// Forces a hover state for offscreen renders, so `--chart-png` can show what
+    /// the highlight actually looks like.
+    func setHoverForSnapshot(_ index: Int?) { hovered = index }
+
+    /// Freezes the draw-in animation at a given progress, so a mid-animation
+    /// frame can be inspected offscreen.
+    func setRevealForSnapshot(_ value: CGFloat) {
+        revealTimer?.invalidate()
+        reveal = min(max(value, 0), 1)
+        needsDisplay = true
+    }
+    /// 0…1 draw-in progress; 1 means fully drawn.
+    private var reveal: CGFloat = 1
+    private var revealTimer: Timer?
 
     /// A donut needs enough segments to read as part-to-whole; with one or two it
     /// is just a pie chart of nothing. Those cases get a single 100% bar instead.
@@ -100,8 +127,84 @@ final class ChartView: NSView {
         metric == .tokens ? fmtTokens(d.tokens) : fmtMoney(d.cost)
     }
 
+    // MARK: Animation
+
+    /// Draws the chart in over ~0.4s. Called when the popover opens and when the
+    /// metric changes — not on a background data refresh, which would restart the
+    /// animation under a reader who is mid-look.
+    func animateIn() {
+        revealTimer?.invalidate()
+        reveal = 0
+        let start = Date()
+        let duration = 0.42
+        revealTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) {
+            [weak self] timer in
+            guard let self else { return timer.invalidate() }
+            let t = min(1, Date().timeIntervalSince(start) / duration)
+            // Ease-out cubic: quick off the mark, settles gently.
+            self.reveal = CGFloat(1 - pow(1 - t, 3))
+            self.needsDisplay = true
+            if t >= 1 { timer.invalidate(); self.revealTimer = nil }
+        }
+    }
+
+    deinit { revealTimer?.invalidate() }
+
+    // MARK: Hover
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+            owner: self))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        hovered = index(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) { hovered = nil }
+
+    /// Legend row, then the mark itself — both point at the same slice, so
+    /// hovering either highlights both.
+    private func index(at point: CGPoint) -> Int? {
+        if let i = legendRects.firstIndex(where: { $0.insetBy(dx: 0, dy: -2).contains(point) }) {
+            return i
+        }
+        let total = slices.reduce(0.0) { $0 + $1.value(metric) }
+        guard total > 0 else { return nil }
+
+        if usesBar {
+            guard barRect.insetBy(dx: -hitSlop, dy: -hitSlop).contains(point) else { return nil }
+            let fraction = min(max((point.x - barRect.minX) / barRect.width, 0), 0.999)
+            return slice(atFraction: Double(fraction), total: total)
+        }
+
+        let dx = point.x - donutCentre.x, dy = point.y - donutCentre.y
+        let r = (dx * dx + dy * dy).squareRoot()
+        let inner = donutRadius - ringWidth / 2 - hitSlop
+        let outer = donutRadius + ringWidth / 2 + hitSlop
+        guard r >= inner, r <= outer else { return nil }
+        // Clockwise from 12 o'clock, matching the draw order.
+        var theta = .pi / 2 - atan2(dy, dx)
+        if theta < 0 { theta += .pi * 2 }
+        return slice(atFraction: Double(theta / (.pi * 2)), total: total)
+    }
+
+    private func slice(atFraction f: Double, total: Double) -> Int? {
+        var acc = 0.0
+        for (i, s) in slices.enumerated() {
+            acc += s.value(metric) / total
+            if f <= acc { return i }
+        }
+        return slices.indices.last
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let total = slices.reduce(0.0) { $0 + $1.value(metric) }
+        legendRects = []
 
         guard total > 0 else {
             drawCentred(t("chart.noData"), at: CGPoint(x: bounds.midX, y: bounds.midY),
@@ -111,110 +214,156 @@ final class ChartView: NSView {
 
         var legendTop: CGFloat
         if usesBar {
-            let caption = metric == .cost ? t("chart.estimated") : t("chart.total")
-            let value = metric == .tokens ? fmtTokens(Int(total)) : fmtMoney(total)
-            draw(caption, at: NSRect(x: padding, y: bounds.maxY - padding - 14,
-                                    width: bounds.width, height: 14),
-                 font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .left)
-            draw(value, at: NSRect(x: padding, y: bounds.maxY - padding - 34,
-                                   width: bounds.width - padding * 2, height: 22),
-                 font: .systemFont(ofSize: 21, weight: .semibold),
-                 colour: .labelColor, alignment: .left)
-            let bar = NSRect(x: padding, y: bounds.maxY - padding - 34 - barHeight - 4,
+            let bar = NSRect(x: padding, y: bounds.maxY - padding - 38 - barHeight,
                              width: bounds.width - padding * 2, height: barHeight)
+            barRect = bar
+            drawReadout(total: total, origin: CGPoint(x: padding, y: bounds.maxY - padding))
             drawSplitBar(total: total, in: bar)
             legendTop = bar.minY - 20
         } else {
-            let centre = CGPoint(x: bounds.midX, y: bounds.maxY - padding - donutDiameter / 2)
-            drawDonut(total: total, centre: centre)
-            drawCentreLabel(total: total, centre: centre)
-            legendTop = centre.y - donutDiameter / 2 - 20
+            donutCentre = CGPoint(x: bounds.midX, y: bounds.maxY - padding - donutDiameter / 2)
+            donutRadius = (donutDiameter - ringWidth) / 2
+            drawDonut(total: total, centre: donutCentre)
+            drawCentreLabel(total: total, centre: donutCentre)
+            legendTop = donutCentre.y - donutDiameter / 2 - 20
         }
 
         for (i, slice) in slices.enumerated() {
-            drawLegendRow(slice, colour: chartPalette[i % chartPalette.count],
-                          share: slice.value(metric) / total, y: legendTop)
+            let row = NSRect(x: 0, y: legendTop, width: bounds.width, height: rowHeight - 4)
+            legendRects.append(row)
+            drawLegendRow(slice, index: i, share: slice.value(metric) / total, y: legendTop)
             legendTop -= rowHeight
         }
     }
 
-    /// One 100% bar: rounded outer ends, 2px surface gaps between segments.
+    /// Left-aligned caption + hero figure, used by the bar layout. On hover the
+    /// value leads and the model name follows — the legend's hierarchy inverted.
+    private func drawReadout(total: Double, origin: CGPoint) {
+        let hoveredSlice = hovered.flatMap { slices.indices.contains($0) ? slices[$0] : nil }
+        let caption = hoveredSlice?.label
+            ?? (metric == .cost ? t("chart.estimated") : t("chart.total"))
+        let shown = hoveredSlice?.value(metric) ?? total
+        let value = metric == .tokens ? fmtTokens(Int(shown * Double(reveal)))
+                                      : fmtMoney(shown * Double(reveal))
+        draw(caption, at: NSRect(x: origin.x, y: origin.y - 14, width: bounds.width - padding * 2, height: 14),
+             font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .left)
+        draw(value, at: NSRect(x: origin.x, y: origin.y - 34, width: bounds.width - padding * 2, height: 22),
+             font: .systemFont(ofSize: 21, weight: .semibold),
+             colour: .labelColor, alignment: .left)
+    }
+
+    /// One 100% bar: rounded outer ends, 2px surface gaps between segments. The
+    /// hovered segment keeps full colour while the rest recede.
     private func drawSplitBar(total: Double, in rect: NSRect) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         let gap: CGFloat = 2
-        let radius: CGFloat = 4
         cg.saveGState()
-        let clip = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
-        clip.addClip()
+        NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).addClip()
+        // Reveal wipes left to right.
+        cg.clip(to: NSRect(x: rect.minX, y: rect.minY,
+                           width: rect.width * reveal, height: rect.height))
         var x = rect.minX
         for (i, slice) in slices.enumerated() {
-            let share = CGFloat(slice.value(metric) / total)
-            let full = share * rect.width
+            let full = CGFloat(slice.value(metric) / total) * rect.width
             let isLast = i == slices.count - 1
             let w = isLast ? rect.maxX - x : max(full - gap, 1)
-            chartPalette[i % chartPalette.count].setFill()
+            colour(i).setFill()
             NSRect(x: x, y: rect.minY, width: w, height: rect.height).fill()
             x += full
         }
         cg.restoreGState()
     }
 
+    /// Series colour, dimmed when another slice is hovered.
+    private func colour(_ i: Int) -> NSColor {
+        let base = chartPalette[i % chartPalette.count]
+        guard let hovered, hovered != i else { return base }
+        return base.withAlphaComponent(0.3)
+    }
+
     private func drawDonut(total: Double, centre: CGPoint) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
-        let radius = (donutDiameter - ringWidth) / 2
         // A 2px gap in the surface separates touching segments — no track behind
         // them and no stroked border, so the gap is the popover material itself.
-        let gap = 2 / radius // radians subtending 2px at the ring
+        let gap = 2 / donutRadius // radians subtending 2px at the ring
         cg.saveGState()
-        cg.setLineWidth(ringWidth)
         cg.setLineCap(.butt)
 
         var start = CGFloat.pi / 2 // 12 o'clock, clockwise
+        let limit = CGFloat.pi * 2 * reveal // draw-in sweeps clockwise
+        var travelled: CGFloat = 0
         for (i, slice) in slices.enumerated() {
-            let share = CGFloat(slice.value(metric) / total)
-            let sweep = share * .pi * 2
-            // Keep a hairline of every non-zero slice visible after the gap.
-            let drawn = max(sweep - gap, gap)
-            cg.setStrokeColor(chartPalette[i % chartPalette.count].cgColor)
-            cg.addArc(center: centre, radius: radius,
-                      startAngle: start - gap / 2, endAngle: start - gap / 2 - drawn,
-                      clockwise: true)
-            cg.strokePath()
+            let sweep = CGFloat(slice.value(metric) / total) * .pi * 2
+            let remaining = limit - travelled
+            if remaining > 0 {
+                // Keep a hairline of every non-zero slice visible after the gap.
+                let drawn = max(min(sweep, remaining) - gap, gap)
+                let lifted = hovered == i
+                cg.setLineWidth(ringWidth + (lifted ? 5 : 0))
+                cg.setStrokeColor(colour(i).cgColor)
+                cg.addArc(center: centre, radius: donutRadius,
+                          startAngle: start - gap / 2, endAngle: start - gap / 2 - drawn,
+                          clockwise: true)
+                cg.strokePath()
+            }
+            travelled += sweep
             start -= sweep
         }
         cg.restoreGState()
     }
 
+    /// The hole doubles as the readout: the total normally, the hovered slice when
+    /// there is one.
     private func drawCentreLabel(total: Double, centre: CGPoint) {
-        let caption = metric == .cost ? t("chart.estimated") : t("chart.total")
-        let value = metric == .tokens ? fmtTokens(Int(total)) : fmtMoney(total)
-        drawCentred(caption, at: CGPoint(x: centre.x, y: centre.y + 13),
-                    font: .systemFont(ofSize: 11), color: .secondaryLabelColor)
+        let hoveredSlice = hovered.flatMap { slices.indices.contains($0) ? slices[$0] : nil }
+        let caption = hoveredSlice?.label
+            ?? (metric == .cost ? t("chart.estimated") : t("chart.total"))
+        let shown = hoveredSlice?.value(metric) ?? total
+        let value = metric == .tokens ? fmtTokens(Int(shown * Double(reveal)))
+                                      : fmtMoney(shown * Double(reveal))
+        let inner = donutRadius - ringWidth / 2
+        draw(clipDisplay(caption, 20),
+             at: NSRect(x: centre.x - inner, y: centre.y + 6, width: inner * 2, height: 14),
+             font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .center)
         // A standalone hero figure reads better in proportional figures.
         drawCentred(value, at: CGPoint(x: centre.x, y: centre.y - 11),
                     font: .systemFont(ofSize: 21, weight: .semibold),
                     color: .labelColor)
     }
 
-    private func drawLegendRow(_ slice: ChartDatum, colour: NSColor, share: Double, y: CGFloat) {
+    private func drawLegendRow(_ slice: ChartDatum, index: Int, share: Double, y: CGFloat) {
+        let isHovered = hovered == index
+        if isHovered {
+            // A ghost wash, so it never competes with the mark it is pointing at.
+            NSColor.labelColor.withAlphaComponent(0.07).setFill()
+            NSBezierPath(roundedRect: NSRect(x: padding - 8, y: y - 2,
+                                             width: bounds.width - (padding - 8) * 2,
+                                             height: rowHeight - 2),
+                         xRadius: 5, yRadius: 5).fill()
+        }
+
         let dot = NSRect(x: padding, y: y + 5, width: 9, height: 9)
-        colour.setFill()
+        colour(index).setFill()
         NSBezierPath(ovalIn: dot).fill()
 
         // Names in the UI sans; the numeric columns get tabular figures so they
         // line up. Text always wears ink colours, never the series colour.
-        let nameFont = NSFont.systemFont(ofSize: 12)
-        let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        let dim = hovered != nil && !isHovered
+        let nameFont = NSFont.systemFont(ofSize: 12, weight: isHovered ? .semibold : .regular)
+        let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 12,
+                                                          weight: isHovered ? .semibold : .regular)
+        let ink: NSColor = dim ? .tertiaryLabelColor : .labelColor
+        let subInk: NSColor = dim ? .tertiaryLabelColor : .secondaryLabelColor
         let percentX = bounds.maxX - padding - 44
         let valueX = percentX - 78
 
         draw(slice.label, at: NSRect(x: padding + 17, y: y, width: valueX - padding - 23, height: 16),
-             font: nameFont, colour: .labelColor, alignment: .left)
+             font: nameFont, colour: ink, alignment: .left)
         draw(fmt(slice), at: NSRect(x: valueX, y: y, width: 74, height: 16),
-             font: numberFont, colour: .labelColor, alignment: .right)
+             font: numberFont, colour: ink, alignment: .right)
         draw(String(format: "%.1f%%", share * 100),
              at: NSRect(x: percentX, y: y, width: 44, height: 16),
-             font: numberFont, colour: .secondaryLabelColor, alignment: .right)
+             font: numberFont, colour: subInk, alignment: .right)
     }
 
     private func draw(_ s: String, at rect: NSRect, font: NSFont, colour: NSColor,
@@ -262,6 +411,7 @@ final class ChartPopover: NSObject {
         reload()
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+        chart.animateIn()
     }
 
     /// Refreshes in place if the popover is already showing this scope.
@@ -336,6 +486,7 @@ final class ChartPopover: NSObject {
     @objc private func metricChanged(_ sender: NSSegmentedControl) {
         metric = sender.selectedSegment == 1 ? .cost : .tokens
         reload()
+        chart.animateIn()
     }
 
     /// Renders the popover's own content offscreen, so `--chart-png` shows the
@@ -344,7 +495,7 @@ final class ChartPopover: NSObject {
     /// properly inside one, and it also gets the display's native pixel density.
     /// `dark` renders the dark-mode steps of the palette.
     func snapshot(scope: ChartScope, data: [ChartDatum], metric: ChartMetric,
-                  dark: Bool = false) -> Data? {
+                  dark: Bool = false, hover: Int? = nil, reveal: CGFloat = 1) -> Data? {
         self.scope = scope
         self.data = data
         self.metric = metric
@@ -352,6 +503,8 @@ final class ChartPopover: NSObject {
         localise()
         toggle.selectedSegment = metric == .cost ? 1 : 0
         reload()
+        chart.setHoverForSnapshot(hover)
+        chart.setRevealForSnapshot(reveal)
         guard let view = popover.contentViewController?.view else { return nil }
         let size = NSSize(width: width, height: headerHeight + chart.fittingHeight)
 

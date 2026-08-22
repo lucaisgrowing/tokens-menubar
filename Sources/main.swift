@@ -1061,9 +1061,16 @@ func runChartPNG(path: String) -> Never {
     let models = scope == .today ? local.todayModels : (server?.models ?? [])
     let data = models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) }
     let dark = args.contains("dark")
+    // `hover N` renders the highlight state for slice N; `reveal F` freezes the
+    // draw-in animation at progress F.
+    var hover: Int?
+    if let i = args.firstIndex(of: "hover"), args.count > i + 1 { hover = Int(args[i + 1]) }
+    var reveal: CGFloat = 1
+    if let i = args.firstIndex(of: "reveal"), args.count > i + 1,
+       let v = Double(args[i + 1]) { reveal = CGFloat(v) }
 
     guard let png = ChartPopover.shared.snapshot(scope: scope, data: data, metric: metric,
-                                                 dark: dark) else {
+                                                 dark: dark, hover: hover, reveal: reveal) else {
         print("render failed")
         exit(1)
     }

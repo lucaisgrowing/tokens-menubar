@@ -44,6 +44,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 前 5 个模型各占一块，其余折进「其他」—— 环形图超过 6 块就不好读了。只有一两个模型时会改画成一条 100% 的横条。浅色和深色模式各用一套配色，分别按各自背景做过对比度和色盲可分辨性校验。
 
+面板打开、以及切换 Token / 费用 时，图表会有一段画入动效。鼠标悬停某一块（或图例里对应那一行），两边会同时高亮、其余变淡，中间的读数换成那个模型自己的数字。
+
 <p align="center">
   <img src="docs/chart-today-tokens.png" width="360" alt="今日模型分布（按 token）">
   <img src="docs/chart-lifetime-cost.png" width="360" alt="累计模型分布（按费用）">
@@ -130,7 +132,9 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 ./TokensBar.app/Contents/MacOS/TokensBar --dump [--lang en|zh]
 
 # 把整个图表面板离屏渲染成 PNG，用来预览布局
-./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png [today|lifetime] [tokens|cost]
+# dark = 深色模式，hover N = 第 N 块的悬停态，reveal F = 把画入动效冻结在进度 F
+./TokensBar.app/Contents/MacOS/TokensBar --chart-png out.png \
+    [today|lifetime] [tokens|cost] [dark] [hover N] [reveal F]
 
 # 拿当前版本和 GitHub 最新 release 比一下
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
