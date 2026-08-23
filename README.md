@@ -33,6 +33,8 @@ menu bar:  ⚡ 12.4M  #87       ← all-time rank
      or:   ⚡ 12.4M  D#31      ← today's rank
 ```
 
+The token figure is today's total for the whole account, the same number the site shows, so it lines up with the rank beside it. Hover the icon for this machine's live figure as well.
+
 English and 简体中文 are both built in — switch from the Language submenu (English is the default), or set `language` in the config file.
 
 ## Model distribution
@@ -40,7 +42,7 @@ English and 简体中文 are both built in — switch from the Language submenu 
 Clicking the **Lifetime** or **Today** row opens a popover under the menu bar icon with a donut chart of the per-model split, and a Tokens / Cost toggle:
 
 - **Lifetime** comes from the API's `modelUsage`
-- **Today** comes from the local CLI scan, so it is live rather than waiting on the next submission
+- **Today** comes from the day's entry in the API's `contributions`, so it covers every device on the account — the same figure the Today row shows. Before the day's first submission it falls back to the local scan.
 
 The top five models get their own slice and the rest fold into "Others" — a donut stops being readable much past six segments. With one or two models it draws a single 100% bar instead. Light and dark mode each get their own colour steps, chosen for contrast against that surface and checked for colour-blind separation.
 
@@ -172,13 +174,13 @@ The "Launch at Login" checkbox in the menu does the same thing as `--set-login`.
 
 Two data sources:
 
-- **Ranks, lifetime totals and the model split** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today`. No credentials are sent.
-- **Today and this week** — the local CLI, `tokens --today --json` and `tokens --week --json`, so these are live instead of waiting for the next submission.
+- **The API** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today`. Both ranks, the lifetime totals, the model split, the contributions grid, and **today's totals**. No credentials are sent.
+- **The local CLI** — `tokens --today --json` and `tokens --week --json`. This week, and today on this machine.
 
 Two things worth knowing:
 
 - Percentages in the dropdown are a share of tokens, recomputed locally. The API's own percentages are a share of cost, so the two can differ.
-- Today in the dropdown is this machine's local scan, while the daily board rank is server-side and sums every device on the account. With more than one machine the local figure reads lower.
+- The **Today** row is the server's figure, so it agrees with the daily rank and with the site: every device on the account, as of the last submission. The dim line under it is this machine's live scan. The two differ in both directions — another machine's usage is in the first but not the second, and anything done since the last submission is in the second but not the first. The token gap can be far larger than the cost gap, because a cache-heavy free model contributes millions of tokens for almost nothing.
 
 If the API cannot be reached, the dropdown reports that the server read failed and keeps the last figures it had.
 

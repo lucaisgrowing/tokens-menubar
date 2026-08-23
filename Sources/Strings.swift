@@ -41,14 +41,18 @@ enum L10n {
 
         "row.lifetime": ("Lifetime", "累计"),
         "row.today": ("Today", "今日"),
+        // Sits under the Today row: that row is every device as of the last
+        // submission, this one is this machine right now.
+        "row.todayLocal": ("↑ all devices · this Mac, live: %1$@  %2$@",
+                           "↑ 全部设备累计 · 本机实时 %1$@  %2$@"),
         "row.week": ("This week", "本周"),
 
         "state.notLoggedIn": ("Not signed in", "未登录"),
         "state.serverFailed": ("Lifetime   server read failed (proxy? tokens.ci unreachable?)",
                                "累计   服务端读取失败（检查代理 / tokens.ci 可达性）"),
         "state.loading": ("Lifetime   loading…", "累计   载入中…"),
-        "state.localFailed": ("Today   local scan failed (tokens CLI not found?)",
-                              "今日   本地扫描失败（找不到 tokens CLI？）"),
+        "state.localFailed": ("This Mac   local scan failed (tokens CLI not found?)",
+                              "本机   本地扫描失败（找不到 tokens CLI？）"),
 
         "gap.behind": ("%1$@ · %2$@ behind #%3$d @%4$@", "%1$@ 距 #%3$d @%4$@ 还差 %2$@"),
         "gap.first": ("%@ · you are #1", "%@ 已经是第 1 名"),
@@ -105,7 +109,8 @@ enum L10n {
 
         "tooltip.localFailed": ("tokens CLI not found, or the local scan failed",
                                 "找不到 tokens CLI 或本地扫描失败"),
-        "tooltip.today": ("%@ tokens today", "今日 %@ tokens"),
+        "tooltip.todayAll": ("%@ tokens today, all devices", "今日 %@ tokens（全部设备）"),
+        "tooltip.todayLocal": ("%@ tokens on this Mac, live", "本机实时 %@ tokens"),
         "tooltip.rankAllTime": ("All-time board: #%1$d of %2$d", "累计榜 第 %1$d / %2$d 名"),
         "tooltip.rankToday": ("Today's board: #%1$d of %2$d", "今日榜 第 %1$d / %2$d 名"),
         "tooltip.rankTodayNone": ("Today's board: unranked", "今日榜 未上榜"),

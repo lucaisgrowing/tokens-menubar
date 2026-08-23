@@ -2,8 +2,9 @@
 //
 // Menu bar line:  ⚡ <today tokens>  #<rank>
 // Data sources:
-//   - tokens.ci REST API  → rank, lifetime totals, model split, neighbour gap
-//   - local `tokens` CLI  → today / this week, live (not yet submitted)
+//   - tokens.ci REST API  → rank, lifetime and today's totals (every device on
+//     the account, as of the last submission), model split, neighbour gap
+//   - local `tokens` CLI  → this week, and today on this machine, live
 //
 // Build: ./build.sh   Run: open TokensBar.app
 //
@@ -198,6 +199,22 @@ struct ServerStats {
     func standing(_ mode: RankMode) -> BoardStanding? {
         mode == .today ? today : allTime
     }
+
+    /// Today as the server has it: every device on the account, as of the last
+    /// submission. Keyed by the GMT day — the same day the daily board counts, so
+    /// the Today row and the daily rank never disagree. Nil until the first
+    /// submission of that day lands.
+    var todayDay: ContribDay? {
+        let key = dayFormatter.string(from: Date())
+        return contribs.first { dayFormatter.string(from: $0.date) == key }
+    }
+
+    /// Today's per-model split, for the donut chart.
+    var todayModels: [ModelSlice] {
+        (todayDay?.models ?? []).map {
+            ModelSlice(model: $0.name, tokens: $0.tokens, cost: $0.cost)
+        }
+    }
 }
 
 struct LocalStats {
@@ -209,6 +226,14 @@ struct LocalStats {
     var todayModels: [ModelSlice] = []
     var updatedAt: Date?
     var failed = false
+}
+
+/// Today's slices for the donut chart: the server's all-device split, so the
+/// chart agrees with the Today row, falling back to this machine's scan before
+/// the day's first submission.
+func todayChartModels(_ local: LocalStats, _ server: ServerStats?) -> [ModelSlice] {
+    let fromServer = server?.todayModels ?? []
+    return fromServer.isEmpty ? local.todayModels : fromServer
 }
 
 // MARK: - JSON helpers
@@ -533,8 +558,16 @@ struct Presenter {
     let serverFailed: Bool
     let transient: String?
 
+    /// The server's figure for today — all devices, as of the last submission.
+    /// Preferred everywhere over the local scan so the numbers agree with the
+    /// daily rank and with the site; the local scan is still shown alongside,
+    /// because it is live.
+    private var serverToday: ContribDay? { server?.todayDay }
+
     var title: String {
-        var parts = [local.failed ? "—" : fmtTokens(local.todayTokens)]
+        var parts: [String] = []
+        if let d = serverToday { parts.append(fmtTokens(d.tokens)) }
+        else { parts.append(local.failed ? "—" : fmtTokens(local.todayTokens)) }
         if let st = server?.standing(rankMode) {
             parts.append(st.rank > 0 ? "\(rankMode.badge)\(st.rank)" : "\(rankMode.badge)—")
         } else if serverFailed {
@@ -544,8 +577,10 @@ struct Presenter {
     }
 
     var tooltip: String {
-        var bits = [local.failed ? t("tooltip.localFailed")
-                                 : t("tooltip.today", fmtExact(local.todayTokens))]
+        var bits: [String] = []
+        if let d = serverToday { bits.append(t("tooltip.todayAll", fmtExact(d.tokens))) }
+        bits.append(local.failed ? t("tooltip.localFailed")
+                                 : t("tooltip.todayLocal", fmtExact(local.todayTokens)))
         if let s = server {
             if let a = s.allTime, a.rank > 0 {
                 bits.append(t("tooltip.rankAllTime", a.rank, a.totalUsers))
@@ -595,11 +630,26 @@ struct Presenter {
             out.append(.note(t("state.loading")))
         }
 
+        // Today is the server's all-device figure, so this row, the daily rank
+        // and the site all say the same thing. Before the day's first submission
+        // there is no server figure yet and the local scan stands in.
+        if let d = serverToday {
+            out.append(.row(t("row.today"), fmtTokens(d.tokens), fmtMoney(d.cost), .chart(.today)))
+        } else if !local.failed {
+            out.append(.row(t("row.today"), fmtTokens(local.todayTokens),
+                            fmtMoney(local.todayCost), .chart(.today)))
+        }
+
         if local.failed {
             out.append(.note(t("state.localFailed")))
         } else {
-            out.append(.row(t("row.today"), fmtTokens(local.todayTokens),
-                            fmtMoney(local.todayCost), .chart(.today)))
+            // The live counterpart: this machine only, including work not yet
+            // submitted. Kept visible because the row above can only move when a
+            // submission lands.
+            if serverToday != nil {
+                out.append(.note(t("row.todayLocal", fmtTokens(local.todayTokens),
+                                   fmtMoney(local.todayCost))))
+            }
             out.append(.row(t("row.week"), fmtTokens(local.weekTokens),
                             fmtMoney(local.weekCost), nil))
         }
@@ -712,6 +762,10 @@ final class Controller: NSObject, NSMenuDelegate {
             if let models = self.server?.models {
                 ChartPopover.shared.update(scope: .lifetime, data: models.map(Self.datum))
             }
+            // Today's split comes from the server too, so a server refresh moves it.
+            ChartPopover.shared.update(
+                scope: .today,
+                data: todayChartModels(self.local, self.server).map(Self.datum))
             if let st = self.server, let from = st.contribStart, let to = st.contribEnd {
                 ContribPopover.shared.update(days: st.contribs, start: from, end: to)
             }
@@ -741,8 +795,9 @@ final class Controller: NSObject, NSMenuDelegate {
                     self.local.updatedAt = Date()
                 }
                 self.render()
-                ChartPopover.shared.update(scope: .today,
-                                                   data: self.local.todayModels.map(Self.datum))
+                ChartPopover.shared.update(
+                    scope: .today,
+                    data: todayChartModels(self.local, self.server).map(Self.datum))
             }
         }
     }
@@ -1014,7 +1069,7 @@ final class Controller: NSObject, NSMenuDelegate {
         case let which:
             let isToday = which == "today"
             let scope: ChartScope = isToday ? .today : .lifetime
-            let models = isToday ? local.todayModels : (server?.models ?? [])
+            let models = isToday ? todayChartModels(local, server) : (server?.models ?? [])
             ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
                                      from: statusItem.button)
         }
@@ -1106,7 +1161,7 @@ func runDump() -> Never {
     }
 
     // The same slices the donut chart would draw.
-    for (scope, models) in [(ChartScope.today, local.todayModels),
+    for (scope, models) in [(ChartScope.today, todayChartModels(local, server)),
                             (ChartScope.lifetime, server?.models ?? [])] {
         print("\n\(t(scope.titleKey)):")
         for metric in [ChartMetric.tokens, .cost] {
@@ -1132,7 +1187,7 @@ func runChartPNG(path: String) -> Never {
     let args = CommandLine.arguments
     let scope: ChartScope = args.contains("lifetime") ? .lifetime : .today
     let metric: ChartMetric = args.contains("cost") ? .cost : .tokens
-    let models = scope == .today ? local.todayModels : (server?.models ?? [])
+    let models = scope == .today ? todayChartModels(local, server) : (server?.models ?? [])
     let data = models.map { ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost) }
     let dark = args.contains("dark")
     // `hover N` renders the highlight state for slice N; `reveal F` freezes the
