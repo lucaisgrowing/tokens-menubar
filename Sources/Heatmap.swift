@@ -343,7 +343,11 @@ final class ContribPopover: NSObject {
     private let grid = HeatmapView()
     private let heading = NSTextField(labelWithString: "")
     private var toggle: NSSegmentedControl!
+    private var gridWidth: NSLayoutConstraint!
+    private var gridHeight: NSLayoutConstraint!
     private var built = false
+
+    var isShown: Bool { popover.isShown }
 
     func show(days: [ContribDay], start: Date, end: Date, from anchor: NSView?) {
         guard let anchor else { return }
@@ -382,8 +386,14 @@ final class ContribPopover: NSObject {
         grid.start = start
         grid.end = end
         localise()
+        // The grid draws itself and has no intrinsic size, so its size has to be
+        // stated as constraints: the content view is laid out by autolayout, and a
+        // popover whose content is fully constrained sizes itself from that fitting
+        // size rather than from `contentSize`. Setting only the frame left the grid
+        // at zero and the popover opened as an empty 26×58 bubble.
         let size = grid.neededSize
-        grid.frame = NSRect(origin: .zero, size: size)
+        gridWidth.constant = size.width
+        gridHeight.constant = size.height
         popover.contentSize = NSSize(width: size.width, height: size.height + 40)
     }
 
@@ -408,6 +418,8 @@ final class ContribPopover: NSObject {
         content.addSubview(heading)
         content.addSubview(toggle)
         content.addSubview(grid)
+        gridWidth = grid.widthAnchor.constraint(equalToConstant: 700)
+        gridHeight = grid.heightAnchor.constraint(equalToConstant: 200)
         NSLayoutConstraint.activate([
             heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
             heading.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
@@ -417,6 +429,7 @@ final class ContribPopover: NSObject {
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             grid.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             grid.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            gridWidth, gridHeight,
         ])
 
         let vc = NSViewController()
