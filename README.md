@@ -24,8 +24,8 @@
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
 <p align="center">
-  <img src="docs/menu.png" width="380" alt="The TokensBar dropdown in light mode">
-  <img src="docs/menu-dark.png" width="380" alt="The TokensBar dropdown in dark mode">
+  <img src="docs/menu.png" width="380" alt="The TokensBar dropdown panel in light mode">
+  <img src="docs/menu-dark.png" width="380" alt="The TokensBar dropdown panel in dark mode">
 </p>
 
 ```
@@ -35,11 +35,43 @@ menu bar:  ⚡ 12.4M  #87       ← all-time rank
 
 The token figure is today's total for the whole account, the same number the site shows, so it lines up with the rank beside it. Hover the icon for this machine's live figure as well.
 
-English and 简体中文 are both built in — switch from the Language submenu (English is the default), or set `language` in the config file.
+English and 简体中文 are both built in — switch from the panel's actions page or the Language submenu (English is the default), or set `language` in the config file.
+
+## The dropdown
+
+Left-clicking the icon draws the panel above. Today's total leads, then the board
+the menu bar is showing with the gap to the person one place up as a bar, today
+against the average of the seven days before it, the other board and this week as
+cards, the last seven days as bars, and today's model split in the same colours
+the donut uses. Hovering a bar reads that day out next to the heading.
+
+Clicking a section opens the matching view: the headline or the model list opens
+the donut, the bars open the contributions grid, the card opens the other board's
+breakdown. Clickable blocks carry a small chevron, and the line above the footer
+names what the block under the pointer will open — with the pointer over nothing
+it says how the panel works instead. **Submit** runs `tokens submit` and reports
+the result in the footer, beside the last local and server refresh times.
+
+Right-clicking the icon — or the ⋯ button in the panel — reaches the same set of
+actions. The ⋯ button turns the panel to a second page rather than dropping a
+menu over it: submit, refresh, the rank and language switches as pills, a
+launch-at-login switch, the profile link, the update check, the tip page and
+Quit, with **‹ Actions & Settings** back at the top and the build version at the
+bottom. A right-click still pops the plain NSMenu, which carries the same verbs
+with their keyboard shortcuts and keeps the old text dropdown one level down
+under **All Numbers as Text**, as the keyboard and VoiceOver fallback it was
+built to be.
+
+<p align="center">
+  <img src="docs/panel-actions.png" width="380" alt="The actions page inside the panel, light mode">
+  <img src="docs/panel-actions-dark.png" width="380" alt="The actions page inside the panel, dark mode">
+</p>
 
 ## Model distribution
 
-Clicking the **Lifetime** or **Today** row opens a popover under the menu bar icon with a donut chart of the per-model split, and a Tokens / Cost toggle:
+Clicking the headline, or a model row — or the **Lifetime** / **Today** row in
+the menu — opens a popover under the menu bar icon with a donut chart of the
+per-model split, and a Tokens / Cost toggle:
 
 - **Lifetime** comes from the API's `modelUsage`
 - **Today** comes from the day's entry in the API's `contributions`, so it covers every device on the account — the same figure the Today row shows. Before the day's first submission it falls back to the local scan.
@@ -55,7 +87,7 @@ The chart draws itself in when the popover opens and when the metric changes. Ho
 
 ## Contributions
 
-The **Active days** row opens a year of daily token activity as a heat grid, the same view the site carries. Hovering a day reads out its tokens, cost, message count and per-client split; the pointer-free state shows the active-day count and the window covered.
+The seven-day bars in the panel — or the **Active days** row in the menu — open a year of daily token activity as a heat grid, the same view the site carries. Hovering a day reads out its tokens, cost, message count and per-client split; the pointer-free state shows the active-day count and the window covered.
 
 <p align="center">
   <img src="docs/contributions.png" width="640" alt="A year of daily token activity as a heat grid">
@@ -72,7 +104,7 @@ The ramp is one hue, light to dark, with separate steps for light and dark mode;
 
 `#87 / 265` means rank 87 out of the 265 people on that board. In the menu bar a daily rank is prefixed (`D#31`, `今#31` in Chinese) to tell it apart from a lifetime one.
 
-Pick which one the menu bar shows from the "Rank Shown in Menu Bar" submenu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always listed in the dropdown; the setting only changes the menu bar line and which board the gap line refers to.
+Pick which one the menu bar shows from the "Rank Shown in Menu Bar" row on the panel's actions page, or the submenu of the same name in the right-click menu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always shown; the setting only changes the menu bar line and which board the gap bar refers to.
 
 ## Requirements
 
@@ -155,6 +187,23 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # Render the contributions grid offscreen.
 ./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png \
     [models|clients|cost] [dark] [hover YYYY-MM-DD]
+
+# Render the dropdown panel offscreen, and print its clickable regions — a still
+# image cannot show where a click lands. `dark` renders dark mode, `menu` the
+# actions page, `hover N` the readout for day N of the seven (0 = oldest), `hit N`
+# the hover state of clickable region N, which is what the hint line reacts to.
+./TokensBar.app/Contents/MacOS/TokensBar --panel-png out.png [dark] [menu] [hover N] [hit N]
+
+# Open the panel for real against a throwaway anchor and print its live geometry,
+# optionally capturing the popover window. This is what catches the panel sitting
+# off-centre: the popover insets its content view, so the sizes it reports and the
+# sizes asked for are not the same thing. `menu` turns to the actions page while
+# it is open, which is what resizes a shown popover.
+./TokensBar.app/Contents/MacOS/TokensBar --panel-probe [out.png] [menu]
+
+# Print the menu as a tree, both shapes: the short one a right-click opens, and the
+# text fallback with every number inline.
+./TokensBar.app/Contents/MacOS/TokensBar --menu-dump
 
 # Compare this build against the latest GitHub release.
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates

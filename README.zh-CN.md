@@ -24,8 +24,8 @@
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
 <p align="center">
-  <img src="docs/menu.png" width="380" alt="TokensBar 下拉菜单（浅色）">
-  <img src="docs/menu-dark.png" width="380" alt="TokensBar 下拉菜单（深色）">
+  <img src="docs/menu.png" width="380" alt="TokensBar 下拉面板（浅色）">
+  <img src="docs/menu-dark.png" width="380" alt="TokensBar 下拉面板（深色）">
 </p>
 
 ```
@@ -35,11 +35,34 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 前面那个 token 数是整个账号今天的总量，跟网站上是同一个数，所以和旁边的名次口径一致。把鼠标放在图标上还能看到本机的实时值。
 
-界面内置中英双语，默认英文，用下拉里的「语言 / Language」子菜单随时切换，也可以在 config.json 里写 `language` 设默认。
+界面内置中英双语，默认英文，在面板的操作页或「语言 / Language」子菜单里随时切换，也可以在 config.json 里写 `language` 设默认。
+
+## 下拉面板
+
+左键点图标弹出的就是上面那块面板。最上面是今天的总量，接着是菜单栏当前显示的那个榜
+—— 跟前一名的差距画成一条进度条，然后是今天和之前 7 天均值的对比，另一个榜和本周做
+成两张小卡片，再往下是近 7 天的柱状图，最后是今天的模型占比，颜色和环形图一致。悬停
+某根柱子，标题右边会读出那一天的数。
+
+点面板上的区块会打开对应的视图：最上面的总量、或任意一行模型，打开环形图；柱状图打开
+贡献热力图；小卡片打开另一个榜的明细。可点的区块右边都带一个小箭头，底部那行字会说明
+鼠标当前指着的区块点下去会打开什么 —— 没指任何东西时，它说明面板怎么用。**提交**按钮
+跑 `tokens submit`，结果显示在底部，旁边是最近一次本地扫描和服务端刷新的时间。
+
+右键点图标 —— 或者点面板右上角的 ⋯ —— 都能拿到同一组动作。⋯ 不再往面板上盖一层菜单，
+而是把面板翻到第二页：提交、刷新、排名和语言做成一排胶囊按钮、开机启动是个开关，再往下是
+打开主页、检查更新、赞助和退出，顶上是 **‹ 操作与设置**，底下是当前版本号。右键仍然弹原来
+那个 NSMenu，动作一样、快捷键都在，那个纯文字下拉也还在它的**全部数据（文本）**子菜单里，
+继续给键盘和 VoiceOver 用。
+
+<p align="center">
+  <img src="docs/panel-actions.png" width="380" alt="面板里的操作页（浅色）">
+  <img src="docs/panel-actions-dark.png" width="380" alt="面板里的操作页（深色）">
+</p>
 
 ## 模型分布饼图
 
-点**累计**或**今日**那一行，会在菜单栏图标下方弹出一个面板，里面是环形图，右上角带 Token / 费用 切换：
+点最上面的总量、任意一行模型 —— 或者菜单里的**累计** / **今日**那一行 —— 会在菜单栏图标下方弹出一个面板，里面是环形图，右上角带 Token / 费用 切换：
 
 - **累计**用 API 的 `modelUsage`
 - **今日**用 API `contributions` 里当天那条，所以覆盖账号下的全部设备，跟「今日」那一行是同一个数；当天第一次提交之前没有服务端数据，会退回本地扫描
@@ -55,7 +78,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 ## 贡献图
 
-下拉里的**活跃天数**那一行，点开是一年的每日 token 活动热力图，跟网站上那块是同一个视图。悬停某一天会读出当天的 token、花费、消息条数和各客户端占比；没悬停时显示活跃天数和统计区间。
+面板上的近 7 天柱状图 —— 或者菜单里的**活跃天数**那一行 —— 点开是一年的每日 token 活动热力图，跟网站上那块是同一个视图。悬停某一天会读出当天的 token、花费、消息条数和各客户端占比；没悬停时显示活跃天数和统计区间。
 
 <p align="center">
   <img src="docs/contributions.png" width="640" alt="一年的每日 token 活动热力图">
@@ -72,7 +95,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 `#87 / 265` 是「第 87 名 / 榜上共 265 人」。当日名次在菜单栏里前面带个「今」字（`今#31`），用来跟累计名次区分。
 
-菜单栏显示哪一个，用下拉里的「菜单栏显示排名」随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在下拉里始终都列出来，切换只影响菜单栏那一行、以及差距提示看的是哪个榜。
+菜单栏显示哪一个，在面板操作页的「菜单栏显示排名」那一行、或右键菜单里的同名子菜单随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在面板和菜单里始终都列出来，切换只影响菜单栏那一行、以及差距进度条看的是哪个榜。
 
 ## 前提
 
@@ -153,6 +176,19 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 # 把贡献图离屏渲染成 PNG
 ./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png \
     [models|clients|cost] [dark] [hover YYYY-MM-DD]
+
+# 把下拉面板离屏渲染成 PNG，同时打印各个可点区域 —— 静态图看不出点哪里会有反应
+# dark = 深色模式，menu = 操作页，hover N = 近 7 天里第 N 天的悬停态（0 是最早那天），
+# hit N = 第 N 个可点区域的悬停态，也就是底部提示行会跟着变的那个
+./TokensBar.app/Contents/MacOS/TokensBar --panel-png out.png [dark] [menu] [hover N] [hit N]
+
+# 用一个临时锚点真的把面板弹出来，打印它的实际几何，还能顺便截下弹出窗口
+# 面板偏心就是靠这个查出来的：popover 会给内容视图留边，它给的尺寸和我们要的尺寸不是一回事
+# 加 menu 会在弹出后翻到操作页 —— 给已经显示的 popover 改尺寸只有这条路能验
+./TokensBar.app/Contents/MacOS/TokensBar --panel-probe [out.png] [menu]
+
+# 把菜单按树打印出来：右键弹的短菜单，以及带全部数字的文本备用菜单
+./TokensBar.app/Contents/MacOS/TokensBar --menu-dump
 
 # 拿当前版本和 GitHub 最新 release 比一下
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
