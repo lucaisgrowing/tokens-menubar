@@ -730,9 +730,14 @@ final class Controller: NSObject, NSMenuDelegate {
             button.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Tokens")
             button.image?.isTemplate = true
             button.imagePosition = .imageLeading
+            // Left-click opens the drawn panel; right-click keeps the plain menu,
+            // which is the keyboard-shortcut and accessibility path.
+            button.target = self
+            button.action = #selector(statusItemClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         menu.delegate = self
-        statusItem.menu = menu
+        DropdownPanel.shared.onAction = { [weak self] action in self?.handle(action) }
         render()
 
         refreshLocal()
@@ -841,12 +846,92 @@ final class Controller: NSObject, NSMenuDelegate {
                   serverFailed: serverFailed, transient: transient)
     }
 
+    /// The drawn panel reads the same inputs as the text menu, plus the state its
+    /// actions page shows: the numbers alone cannot say whether an update is
+    /// waiting or the login item is on.
+    private var panelData: PanelData {
+        var data = PanelData(config: config, rankMode: rankMode, server: server, local: local,
+                             serverFailed: serverFailed, busy: busy, transient: transient)
+        data.loginEnabled = LoginItem.isEnabled
+        data.updateTitle = updateItemTitle()
+        data.updateWaiting = update?.isNewer == true
+        data.canSubmit = CLI.binary() != nil
+        return data
+    }
+
     private func render() {
         let p = presenter
         statusItem.button?.attributedTitle = NSAttributedString(
             string: " " + p.title, attributes: [.font: monoFont])
         statusItem.button?.toolTip = p.tooltip
         rebuildMenu()
+        DropdownPanel.shared.update(panelData)
+    }
+
+    /// Left-click draws the panel; right-click (or control-click) pops the menu.
+    @objc private func statusItemClicked() {
+        let event = NSApp.currentEvent
+        let wantsMenu = event?.type == .rightMouseUp
+            || event?.modifierFlags.contains(.control) == true
+        if wantsMenu { popMenu(); return }
+        if DropdownPanel.shared.isShown || DropdownPanel.shared.justClosed {
+            DropdownPanel.shared.close()
+            return
+        }
+        // Opening the panel is an explicit request for current numbers.
+        refreshLocal()
+        if lastServerFetch.map({ Date().timeIntervalSince($0) >= 60 }) ?? true { refreshServer() }
+        DropdownPanel.shared.show(panelData, from: statusItem.button)
+    }
+
+    /// The status item only owns the menu for as long as it is open, so a plain
+    /// left-click still reaches `statusItemClicked`.
+    private func popMenu() {
+        DropdownPanel.shared.close()
+        rebuildMenu()
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+    }
+
+    func menuDidClose(_ menu: NSMenu) { statusItem.menu = nil }
+
+    private func handle(_ action: PanelAction) {
+        switch action {
+        case .menuPage, .back:
+            // The panel turns its own pages; the controller only hears the verbs.
+            break
+        case .profile:
+            openProfile()
+        case .textMenu:
+            popMenu()
+        case .history:
+            guard let s = server, let from = s.contribStart, let to = s.contribEnd else { return }
+            DropdownPanel.shared.close()
+            ContribPopover.shared.show(days: s.contribs, start: from, end: to,
+                                       from: statusItem.button)
+        case .chart(let scope):
+            let models = scope == .today ? todayChartModels(local, server) : (server?.models ?? [])
+            guard !models.isEmpty else { return }
+            DropdownPanel.shared.close()
+            ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
+                                     from: statusItem.button)
+        case .submit:
+            submitNow()
+        case .refresh:
+            refreshAll()
+        case .setRank(let mode):
+            use(rank: mode)
+        case .setLanguage(let lang):
+            use(language: lang)
+        case .toggleLogin:
+            toggleLoginItem()
+        case .updates:
+            updateItemClicked()
+        case .support:
+            openSupport()
+        case .quit:
+            quit()
+        }
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
@@ -895,12 +980,40 @@ final class Controller: NSObject, NSMenuDelegate {
         return it
     }
 
-    private func rebuildMenu() {
-        menu.removeAllItems()
-        for line in presenter.lines {
-            if let it = item(line) { menu.addItem(it) }
+    /// The menu as text, for `--menu-dump`: which items live at the top level and
+    /// which are tucked away is the whole point of the two shapes, and that is
+    /// invisible in a screenshot.
+    func menuTree(actionsOnly: Bool) -> [String] {
+        rebuildMenu(actionsOnly: actionsOnly)
+        return Controller.describe(menu, depth: 0)
+    }
+
+    private static func describe(_ m: NSMenu, depth: Int) -> [String] {
+        m.items.flatMap { it -> [String] in
+            let indent = String(repeating: "    ", count: depth)
+            let key = it.keyEquivalent.isEmpty ? "" : "  ⌘" + it.keyEquivalent.uppercased()
+            let body = it.isSeparatorItem
+                ? "──────"
+                : (it.state == .on ? "✓ " : "") + it.title + key
+                    + (it.isEnabled || it.isSeparatorItem ? "" : "  ·")
+            return [indent + body]
+                + (it.submenu.map { Controller.describe($0, depth: depth + 1) } ?? [])
         }
-        addFooter()
+    }
+
+    /// Two shapes for the same menu. The ⋯ button and a right-click want verbs and
+    /// settings — pouring the whole text UI back over the panel reads as going
+    /// back a version. The numbers stay one level down, as the keyboard and
+    /// VoiceOver fallback they were built to be.
+    private func rebuildMenu(actionsOnly: Bool = true) {
+        menu.removeAllItems()
+        if !actionsOnly {
+            for line in presenter.lines {
+                if let it = item(line) { menu.addItem(it) }
+            }
+            menu.addItem(.separator())
+        }
+        addActions(textFallback: actionsOnly)
     }
 
     /// Action rows carry an SF Symbol so the menu reads as a list of verbs
@@ -913,9 +1026,7 @@ final class Controller: NSObject, NSMenuDelegate {
         return it
     }
 
-    private func addFooter() {
-        menu.addItem(.separator())
-
+    private func addActions(textFallback: Bool) {
         let submit = actionItem(busy ? t("action.submitting") : t("action.submit"),
                                symbol: "arrow.up.circle", action: #selector(submitNow), key: "s")
         submit.isEnabled = !busy && CLI.binary() != nil
@@ -924,6 +1035,8 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(actionItem(t("action.refresh"), symbol: "arrow.clockwise",
                                 action: #selector(refreshAll), key: "r"))
 
+        menu.addItem(.separator())
+        if textFallback { menu.addItem(numbersItem()) }
         menu.addItem(rankModeItem())
         menu.addItem(languageItem())
 
@@ -948,6 +1061,19 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(actionItem(t("action.quit"), symbol: "xmark.circle",
                                 action: #selector(quit), key: "q"))
+    }
+
+    /// The old text dropdown, kept whole but tucked into a submenu: same rows, same
+    /// clickable ones, just no longer the thing that greets you.
+    private func numbersItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: t("action.numbers"), action: nil, keyEquivalent: "")
+        parent.image = NSImage(systemSymbolName: "text.alignleft", accessibilityDescription: nil)
+        let sub = NSMenu()
+        for line in presenter.lines {
+            if let it = item(line) { sub.addItem(it) }
+        }
+        parent.submenu = sub
+        return parent
     }
 
     private func updateItemTitle() -> String {
@@ -999,20 +1125,32 @@ final class Controller: NSObject, NSMenuDelegate {
 
     @objc private func setLanguage(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
-              let lang = Lang(rawValue: raw), lang != L10n.current else { return }
+              let lang = Lang(rawValue: raw) else { return }
+        use(language: lang)
+    }
+
+    @objc private func setRankMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = RankMode(rawValue: raw) else { return }
+        use(rank: mode)
+    }
+
+    /// The menu item and the panel's actions page both land here, so a setting
+    /// cannot behave differently depending on which one flipped it.
+    private func use(language lang: Lang) {
+        guard lang != L10n.current else { return }
         L10n.current = lang
-        UserDefaults.standard.set(raw, forKey: Controller.languageKey)
+        UserDefaults.standard.set(lang.rawValue, forKey: Controller.languageKey)
         transient = nil
         render()
         ChartPopover.shared.refreshLanguage()
         ContribPopover.shared.refreshLanguage()
     }
 
-    @objc private func setRankMode(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let mode = RankMode(rawValue: raw) else { return }
+    private func use(rank mode: RankMode) {
+        guard mode != rankMode else { return }
         rankMode = mode
-        UserDefaults.standard.set(raw, forKey: Controller.rankModeKey)
+        UserDefaults.standard.set(mode.rawValue, forKey: Controller.rankModeKey)
         render()
     }
 
@@ -1208,6 +1346,96 @@ func runChartPNG(path: String) -> Never {
     exit(0)
 }
 
+/// Renders the dropdown panel offscreen to a PNG, since the panel cannot be
+/// screenshotted from a script. `dark` for dark mode, `menu` for the actions
+/// page, `hover N` to force the readout for day N of the seven (0 = oldest).
+func runPanelPNG(path: String) -> Never {
+    let (config, local, server) = collect()
+    applyLanguage(config)
+    let args = CommandLine.arguments
+    let mode = UserDefaults.standard.string(forKey: "menuBarRank")
+        .flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
+    var day: Int?
+    if let i = args.firstIndex(of: "hover"), args.count > i + 1 { day = Int(args[i + 1]) }
+    // `hit N` forces the hover state of clickable region N, which is what the
+    // footer hint line reacts to.
+    var hit: Int?
+    if let i = args.firstIndex(of: "hit"), args.count > i + 1 { hit = Int(args[i + 1]) }
+    let page: PanelPage = args.contains("menu") ? .menu : .main
+    var data = PanelData(config: config, rankMode: mode, server: server, local: local,
+                         serverFailed: server == nil, busy: false, transient: nil)
+    // The actions page shows state the numbers do not carry.
+    data.loginEnabled = LoginItem.isEnabled
+    data.canSubmit = CLI.binary() != nil
+    guard let png = DropdownPanel.shared.snapshot(data, dark: args.contains("dark"), page: page,
+                                                  hoverDay: day, hoverHit: hit) else {
+        print("render failed")
+        exit(1)
+    }
+    try? png.write(to: URL(fileURLWithPath: path))
+    print("wrote \(path) (today \(fmtTokens(data.todayTokens)), \(data.models.count) models,"
+        + " rank mode \(mode.rawValue))")
+    for line in DropdownPanel.shared.hitMap(data, page: page) { print("  " + line) }
+    exit(0)
+}
+
+/// Opens the panel for real against a throwaway anchor, prints the live
+/// geometry and captures the popover window — the only way to see what the
+/// popover actually does to the view's width without clicking the status item.
+/// Add `menu` to turn to the actions page while it is open, which is what the ⋯
+/// button does.
+func runPanelProbe(path: String?) -> Never {
+    let (config, local, server) = collect()
+    applyLanguage(config)
+    let mode = UserDefaults.standard.string(forKey: "menuBarRank")
+        .flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
+    var data = PanelData(config: config, rankMode: mode, server: server, local: local,
+                         serverFailed: server == nil, busy: false, transient: nil)
+    data.loginEnabled = LoginItem.isEnabled
+    data.canSubmit = CLI.binary() != nil
+    let wantsMenu = CommandLine.arguments.contains("menu")
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let anchor = NSWindow(contentRect: NSRect(x: 500, y: 800, width: 40, height: 24),
+                          styleMask: [.borderless], backing: .buffered, defer: false)
+    anchor.isReleasedWhenClosed = false
+    anchor.backgroundColor = .clear
+    let host = NSView(frame: NSRect(x: 0, y: 0, width: 40, height: 24))
+    anchor.contentView = host
+    anchor.orderFront(nil)
+    DropdownPanel.shared.show(data, from: host)
+    // A refresh landing while the panel is open is what used to shove the content
+    // 13 pt off-centre, so the probe always exercises it.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        DropdownPanel.shared.update(data)
+        if wantsMenu { DropdownPanel.shared.turn(to: .menu) }
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        print(DropdownPanel.shared.probe())
+        if let path { print(DropdownPanel.shared.captureWindow(to: path)) }
+        exit(0)
+    }
+    app.run()
+    exit(0)
+}
+
+/// Prints the menu as a tree, both shapes, and exits.
+func runMenuDump() -> Never {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let controller = Controller()
+    controller.start()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        print("⋯ button / right-click:")
+        for line in controller.menuTree(actionsOnly: true) { print("  " + line) }
+        print("\ntext fallback shape (numbers inline):")
+        for line in controller.menuTree(actionsOnly: false) { print("  " + line) }
+        exit(0)
+    }
+    app.run()
+    exit(0)
+}
+
 /// Prints the update check result and exits.
 func runUpdateCheck() -> Never {
     var result: UpdateInfo??
@@ -1276,6 +1504,14 @@ if let i = CommandLine.arguments.firstIndex(of: "--contrib-png"),
    CommandLine.arguments.count > i + 1 {
     runContribPNG(path: CommandLine.arguments[i + 1])
 }
+if let i = CommandLine.arguments.firstIndex(of: "--panel-png"),
+   CommandLine.arguments.count > i + 1 {
+    runPanelPNG(path: CommandLine.arguments[i + 1])
+}
+if let i = CommandLine.arguments.firstIndex(of: "--panel-probe") {
+    runPanelProbe(path: CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : nil)
+}
+if CommandLine.arguments.contains("--menu-dump") { runMenuDump() }
 
 // `--set-login on|off` toggles the LaunchAgent without opening the menu.
 if let i = CommandLine.arguments.firstIndex(of: "--set-login") {
