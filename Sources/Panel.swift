@@ -48,6 +48,10 @@ extension PanelAction: CustomStringConvertible {
     }
 }
 
+/// How a transient notice reads. A submit outcome gets a banner of its own;
+/// anything else stays on the timestamp line where it always was.
+enum PanelNotice: Equatable { case info, success, failure }
+
 /// Everything the panel draws, derived once per render so the view holds no
 /// opinions about where the numbers come from.
 struct PanelData {
@@ -80,6 +84,9 @@ struct PanelData {
     var isStale = false
     var busy = false
     var transient: String?
+    /// How `transient` reads. A submit outcome gets the banner; a background
+    /// notice like an update check stays on the timestamp line.
+    var noticeKind: PanelNotice = .info
     /// State the actions page shows: everything else is derived from the numbers.
     var loginEnabled = false
     var updateTitle = ""
@@ -190,6 +197,9 @@ private struct PanelLayout {
     var hint = NSRect.zero
     var stamp = NSRect.zero
     var submit = NSRect.zero
+    /// The submit outcome banner, when there is one. Zero-height means no notice,
+    /// so the panel keeps its usual height the rest of the time.
+    var notice = NSRect.zero
     var rules: [CGFloat] = []
 }
 
@@ -287,6 +297,11 @@ final class PanelView: NSView {
     private var hasBoard: Bool { data.primary != nil }
     private var hasWeekBars: Bool { data.recent.contains { $0.tokens > 0 } }
 
+    /// Only a submit outcome earns the banner. A background notice — an update
+    /// check, say — stays on the timestamp line, which is where it never
+    /// interrupted anything.
+    private var hasNotice: Bool { data.transient != nil && data.noticeKind != .info }
+
     var fittingHeight: CGFloat { geometry().height }
 
     override var intrinsicContentSize: NSSize {
@@ -311,6 +326,13 @@ final class PanelView: NSView {
         y += 30
         l.rules.append(y)
         y += 13
+
+        // A submit outcome sits directly under the header, above the number it
+        // just changed. Without a notice the slot takes no space at all.
+        if hasNotice {
+            l.notice = NSRect(x: pad, y: y, width: inner, height: 30)
+            y += 30 + 13
+        }
 
         l.heroValue = NSRect(x: pad, y: y, width: inner - 96, height: 38)
         l.heroCost = NSRect(x: w - pad - 96, y: y + 13, width: 96, height: 20)
@@ -505,6 +527,7 @@ final class PanelView: NSView {
         }
 
         drawHeader(l)
+        if hasNotice { drawNotice(l) }
         drawHero(l)
         if hasBoard { drawBoard(l, accent: accent) }
         drawAverage(l, accent: accent)
@@ -524,6 +547,28 @@ final class PanelView: NSView {
         chevron(after: name, font: titleFont, in: nameRect)
         icon("calendar", in: l.history, size: 14, colour: .secondaryLabelColor)
         icon("ellipsis.circle", in: l.gear, size: 14, colour: .secondaryLabelColor)
+    }
+
+    /// The submit outcome, as a tinted strip under the header. It used to share the
+    /// footer's timestamp line in plain secondary grey, which is where a panel puts
+    /// things nobody needs to read — the one line reporting on a button the user
+    /// just pressed should not be the quietest thing on screen.
+    private func drawNotice(_ l: PanelLayout) {
+        guard let message = data.transient else { return }
+        let ok = data.noticeKind == .success
+        let tint: NSColor = ok ? .systemGreen : .systemRed
+        fill(l.notice, radius: 7, colour: tint.withAlphaComponent(0.14))
+        // A bar down the leading edge, so the strip still reads as a notice for
+        // anyone who cannot separate the green wash from the red one.
+        fill(NSRect(x: l.notice.minX, y: l.notice.minY, width: 3, height: l.notice.height),
+             radius: 1.5, colour: tint)
+        icon(ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+             in: NSRect(x: l.notice.minX + 13, y: l.notice.midY - 8, width: 16, height: 16),
+             size: 12, colour: tint)
+        text(message,
+             in: NSRect(x: l.notice.minX + 34, y: l.notice.midY - 8,
+                        width: l.notice.width - 44, height: 16),
+             font: .systemFont(ofSize: 12, weight: .medium), colour: .labelColor)
     }
 
     private func drawHero(_ l: PanelLayout) {
@@ -732,7 +777,9 @@ final class PanelView: NSView {
              colour: hovering ? .labelColor : .secondaryLabelColor)
 
         let stamp: String
-        if let transient = data.transient {
+        // A submit outcome has the banner up top now; repeating it here would say
+        // the same thing twice. Background notices still land on this line.
+        if let transient = data.transient, !hasNotice {
             stamp = transient
         } else {
             var bits: [String] = []

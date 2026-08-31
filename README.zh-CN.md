@@ -35,7 +35,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 前面那个 token 数是整个账号今天的总量，跟网站上是同一个数，所以和旁边的名次口径一致。把鼠标放在图标上还能看到本机的实时值。
 
-界面内置中英双语，默认英文，在面板的操作页或「语言 / Language」子菜单里随时切换，也可以在 config.json 里写 `language` 设默认。
+界面内置中英双语，默认英文，在面板的操作页或右键菜单「语言 / Language」下面那两行里随时切换，也可以在 config.json 里写 `language` 设默认。
 
 ## 下拉面板
 
@@ -52,8 +52,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 右键点图标 —— 或者点面板右上角的 ⋯ —— 都能拿到同一组动作。⋯ 不再往面板上盖一层菜单，
 而是把面板翻到第二页：提交、刷新、排名和语言做成一排胶囊按钮、开机启动是个开关，再往下是
 打开主页、检查更新、赞助和退出，顶上是 **‹ 操作与设置**，底下是当前版本号。右键仍然弹原来
-那个 NSMenu，动作一样、快捷键都在，那个纯文字下拉也还在它的**全部数据（文本）**子菜单里，
-继续给键盘和 VoiceOver 用。
+那个 NSMenu，动作一样、快捷键都在。这个菜单现在只有一层：数字排在最上面，点它们打开的
+模型分布从菜单栏算起只要一次点击；排名和语言的选项改成标题下面的缩进行，不再做成子菜单。
 
 <p align="center">
   <img src="docs/panel-actions.png" width="380" alt="面板里的操作页（浅色）">
@@ -95,7 +95,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 `#87 / 265` 是「第 87 名 / 榜上共 265 人」。当日名次在菜单栏里前面带个「今」字（`今#31`），用来跟累计名次区分。
 
-菜单栏显示哪一个，在面板操作页的「菜单栏显示排名」那一行、或右键菜单里的同名子菜单随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在面板和菜单里始终都列出来，切换只影响菜单栏那一行、以及差距进度条看的是哪个榜。
+菜单栏显示哪一个，在面板操作页的「菜单栏显示排名」那一行、或右键菜单里同名标题下面的两行随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在面板和菜单里始终都列出来，切换只影响菜单栏那一行、以及差距进度条看的是哪个榜。
 
 ## 前提
 
@@ -180,14 +180,14 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 # 把下拉面板离屏渲染成 PNG，同时打印各个可点区域 —— 静态图看不出点哪里会有反应
 # dark = 深色模式，menu = 操作页，hover N = 近 7 天里第 N 天的悬停态（0 是最早那天），
 # hit N = 第 N 个可点区域的悬停态，也就是底部提示行会跟着变的那个
-./TokensBar.app/Contents/MacOS/TokensBar --panel-png out.png [dark] [menu] [hover N] [hit N]
+./TokensBar.app/Contents/MacOS/TokensBar --panel-png out.png [dark] [menu] [hover N] [hit N] [notice success|failure|info 文字]
 
 # 用一个临时锚点真的把面板弹出来，打印它的实际几何，还能顺便截下弹出窗口
 # 面板偏心就是靠这个查出来的：popover 会给内容视图留边，它给的尺寸和我们要的尺寸不是一回事
 # 加 menu 会在弹出后翻到操作页 —— 给已经显示的 popover 改尺寸只有这条路能验
 ./TokensBar.app/Contents/MacOS/TokensBar --panel-probe [out.png] [menu]
 
-# 把菜单按树打印出来：右键弹的短菜单，以及带全部数字的文本备用菜单
+# 把菜单按树打印出来，缩进行会按它的缩进级别显示
 ./TokensBar.app/Contents/MacOS/TokensBar --menu-dump
 
 # 拿当前版本和 GitHub 最新 release 比一下

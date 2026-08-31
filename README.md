@@ -35,7 +35,7 @@ menu bar:  ⚡ 12.4M  #87       ← all-time rank
 
 The token figure is today's total for the whole account, the same number the site shows, so it lines up with the rank beside it. Hover the icon for this machine's live figure as well.
 
-English and 简体中文 are both built in — switch from the panel's actions page or the Language submenu (English is the default), or set `language` in the config file.
+English and 简体中文 are both built in — switch from the panel's actions page or the Language rows in the right-click menu (English is the default), or set `language` in the config file.
 
 ## The dropdown
 
@@ -58,9 +58,10 @@ menu over it: submit, refresh, the rank and language switches as pills, a
 launch-at-login switch, the profile link, the update check, the tip page and
 Quit, with **‹ Actions & Settings** back at the top and the build version at the
 bottom. A right-click still pops the plain NSMenu, which carries the same verbs
-with their keyboard shortcuts and keeps the old text dropdown one level down
-under **All Numbers as Text**, as the keyboard and VoiceOver fallback it was
-built to be.
+with their keyboard shortcuts. That menu is now one level deep: the numbers sit
+at the top of it, so the per-model breakdowns they open are a single click from
+the menu bar, and the rank and language choices are indented rows under a
+heading rather than submenus.
 
 <p align="center">
   <img src="docs/panel-actions.png" width="380" alt="The actions page inside the panel, light mode">
@@ -104,7 +105,7 @@ The ramp is one hue, light to dark, with separate steps for light and dark mode;
 
 `#87 / 265` means rank 87 out of the 265 people on that board. In the menu bar a daily rank is prefixed (`D#31`, `今#31` in Chinese) to tell it apart from a lifetime one.
 
-Pick which one the menu bar shows from the "Rank Shown in Menu Bar" row on the panel's actions page, or the submenu of the same name in the right-click menu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always shown; the setting only changes the menu bar line and which board the gap bar refers to.
+Pick which one the menu bar shows from the "Rank Shown in Menu Bar" row on the panel's actions page, or the rows under the same heading in the right-click menu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always shown; the setting only changes the menu bar line and which board the gap bar refers to.
 
 ## Requirements
 
@@ -192,7 +193,7 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # image cannot show where a click lands. `dark` renders dark mode, `menu` the
 # actions page, `hover N` the readout for day N of the seven (0 = oldest), `hit N`
 # the hover state of clickable region N, which is what the hint line reacts to.
-./TokensBar.app/Contents/MacOS/TokensBar --panel-png out.png [dark] [menu] [hover N] [hit N]
+./TokensBar.app/Contents/MacOS/TokensBar --panel-png out.png [dark] [menu] [hover N] [hit N] [notice success|failure|info TEXT]
 
 # Open the panel for real against a throwaway anchor and print its live geometry,
 # optionally capturing the popover window. This is what catches the panel sitting
@@ -201,8 +202,7 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 # it is open, which is what resizes a shown popover.
 ./TokensBar.app/Contents/MacOS/TokensBar --panel-probe [out.png] [menu]
 
-# Print the menu as a tree, both shapes: the short one a right-click opens, and the
-# text fallback with every number inline.
+# Print the menu as a tree, with indented rows shown at their indent level.
 ./TokensBar.app/Contents/MacOS/TokensBar --menu-dump
 
 # Compare this build against the latest GitHub release.

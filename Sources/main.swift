@@ -701,6 +701,13 @@ final class Controller: NSObject, NSMenuDelegate {
     private var serverFailed = false
     private var rankMode: RankMode = .allTime
     private var transient: String?
+    /// How the current `transient` reads. A submit outcome earns the panel's
+    /// banner; a background notice stays on the timestamp line.
+    private var noticeKind: PanelNotice = .info
+    /// Bumped every time a notice is set, so a pending clear only fires for the
+    /// notice it was scheduled for — a submit landing during an update check's
+    /// 20-second window used to have its banner wiped early.
+    private var noticeToken = 0
     private var busy = false
     private var update: UpdateInfo?
     private var checkingUpdate = false
@@ -818,23 +825,31 @@ final class Controller: NSObject, NSMenuDelegate {
             self.checkingUpdate = false
             self.update = info
             if announce {
+                let message: String
                 if let info {
-                    self.transient = info.isNewer
+                    message = info.isNewer
                         ? t("update.available", info.latest, info.current)
                         : t("update.upToDate", info.current)
                 } else {
-                    self.transient = t("update.failed")
+                    message = t("update.failed")
                 }
+                self.note(message, kind: .info)
+                self.render()
                 self.clearTransient(after: 20)
+                return
             }
             self.render()
         }
     }
 
+    /// Clears the notice, unless a newer one has already replaced it — two
+    /// overlapping timers would otherwise let the older one wipe the newer text.
     private func clearTransient(after seconds: TimeInterval) {
+        let token = noticeToken
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
-            guard let self else { return }
+            guard let self, self.noticeToken == token else { return }
             self.transient = nil
+            self.noticeKind = .info
             self.render()
         }
     }
@@ -980,17 +995,18 @@ final class Controller: NSObject, NSMenuDelegate {
         return it
     }
 
-    /// The menu as text, for `--menu-dump`: which items live at the top level and
-    /// which are tucked away is the whole point of the two shapes, and that is
-    /// invisible in a screenshot.
-    func menuTree(actionsOnly: Bool) -> [String] {
-        rebuildMenu(actionsOnly: actionsOnly)
+    /// The menu as text, for `--menu-dump`: nesting depth is the thing this menu is
+    /// judged on, and it is invisible in a screenshot.
+    func menuTree() -> [String] {
+        rebuildMenu()
         return Controller.describe(menu, depth: 0)
     }
 
     private static func describe(_ m: NSMenu, depth: Int) -> [String] {
         m.items.flatMap { it -> [String] in
-            let indent = String(repeating: "    ", count: depth)
+            // Indented rows stand in for the submenus this menu used to have, so
+            // the dump has to show indentationLevel or it can't tell them apart.
+            let indent = String(repeating: "    ", count: depth + it.indentationLevel)
             let key = it.keyEquivalent.isEmpty ? "" : "  ⌘" + it.keyEquivalent.uppercased()
             let body = it.isSeparatorItem
                 ? "──────"
@@ -1001,19 +1017,18 @@ final class Controller: NSObject, NSMenuDelegate {
         }
     }
 
-    /// Two shapes for the same menu. The ⋯ button and a right-click want verbs and
-    /// settings — pouring the whole text UI back over the panel reads as going
-    /// back a version. The numbers stay one level down, as the keyboard and
-    /// VoiceOver fallback they were built to be.
-    private func rebuildMenu(actionsOnly: Bool = true) {
+    /// One shape, one level deep. The numbers lead and the verbs follow, both at
+    /// the top level: the model breakdowns hang off the Lifetime, Today and active
+    /// day rows, and burying those in a submenu put the charts three clicks from
+    /// the menu bar.
+    private func rebuildMenu() {
         menu.removeAllItems()
-        if !actionsOnly {
-            for line in presenter.lines {
-                if let it = item(line) { menu.addItem(it) }
-            }
-            menu.addItem(.separator())
+        for line in presenter.lines {
+            if let it = item(line) { menu.addItem(it) }
         }
-        addActions(textFallback: actionsOnly)
+        // The presenter's own trailing rule would otherwise double up with ours.
+        if menu.items.last?.isSeparatorItem != true { menu.addItem(.separator()) }
+        addActions()
     }
 
     /// Action rows carry an SF Symbol so the menu reads as a list of verbs
@@ -1026,7 +1041,7 @@ final class Controller: NSObject, NSMenuDelegate {
         return it
     }
 
-    private func addActions(textFallback: Bool) {
+    private func addActions() {
         let submit = actionItem(busy ? t("action.submitting") : t("action.submit"),
                                symbol: "arrow.up.circle", action: #selector(submitNow), key: "s")
         submit.isEnabled = !busy && CLI.binary() != nil
@@ -1036,9 +1051,8 @@ final class Controller: NSObject, NSMenuDelegate {
                                 action: #selector(refreshAll), key: "r"))
 
         menu.addItem(.separator())
-        if textFallback { menu.addItem(numbersItem()) }
-        menu.addItem(rankModeItem())
-        menu.addItem(languageItem())
+        addRankModeItems()
+        addLanguageItems()
 
         menu.addItem(actionItem(t("action.openProfile"), symbol: "person.crop.circle",
                                 action: #selector(openProfile), key: "o"))
@@ -1063,31 +1077,17 @@ final class Controller: NSObject, NSMenuDelegate {
                                 action: #selector(quit), key: "q"))
     }
 
-    /// The old text dropdown, kept whole but tucked into a submenu: same rows, same
-    /// clickable ones, just no longer the thing that greets you.
-    private func numbersItem() -> NSMenuItem {
-        let parent = NSMenuItem(title: t("action.numbers"), action: nil, keyEquivalent: "")
-        parent.image = NSImage(systemSymbolName: "text.alignleft", accessibilityDescription: nil)
-        let sub = NSMenu()
-        for line in presenter.lines {
-            if let it = item(line) { sub.addItem(it) }
-        }
-        parent.submenu = sub
-        return parent
-    }
-
     private func updateItemTitle() -> String {
         if checkingUpdate { return t("update.checking") }
         if let u = update, u.isNewer { return t("update.openPage", u.latest) }
         return t("action.checkUpdates")
     }
 
-    /// Submenu picking which rank the menu bar shows, with the live numbers
-    /// inline so the choice is obvious.
-    private func rankModeItem() -> NSMenuItem {
-        let parent = NSMenuItem(title: t("action.rankMode"), action: nil, keyEquivalent: "")
-        parent.image = NSImage(systemSymbolName: "list.number", accessibilityDescription: nil)
-        let sub = NSMenu()
+    /// The two boards, as sibling rows under one caption rather than a submenu.
+    /// A checkmark already says which is showing, so the choice does not need a
+    /// level of its own; the live rank rides along so the labels mean something.
+    private func addRankModeItems() {
+        menu.addItem(captionItem(t("action.rankMode"), symbol: "list.number"))
         for mode in [RankMode.allTime, .today] {
             let st = server?.standing(mode)
             let detail: String
@@ -1098,29 +1098,34 @@ final class Controller: NSObject, NSMenuDelegate {
             it.target = self
             it.representedObject = mode.rawValue
             it.state = mode == rankMode ? .on : .off
-            sub.addItem(it)
+            it.indentationLevel = 1
+            menu.addItem(it)
         }
-        sub.addItem(.separator())
-        sub.addItem(disabledItem(t("board.explainAllTime"), font: rowFont, dim: true))
-        sub.addItem(disabledItem(t("board.explainToday"), font: rowFont, dim: true))
-        parent.submenu = sub
-        return parent
     }
 
-    private func languageItem() -> NSMenuItem {
-        let parent = NSMenuItem(title: t("action.language"), action: nil, keyEquivalent: "")
-        parent.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-        let sub = NSMenu()
+    private func addLanguageItems() {
+        menu.addItem(captionItem(t("action.language"), symbol: "globe"))
         for lang in Lang.allCases {
             let it = NSMenuItem(title: lang.displayName,
                                 action: #selector(setLanguage(_:)), keyEquivalent: "")
             it.target = self
             it.representedObject = lang.rawValue
             it.state = lang == L10n.current ? .on : .off
-            sub.addItem(it)
+            it.indentationLevel = 1
+            menu.addItem(it)
         }
-        parent.submenu = sub
-        return parent
+    }
+
+    /// A dim, unclickable heading for the indented rows under it — what a submenu's
+    /// parent item used to say, without the submenu.
+    private func captionItem(_ title: String, symbol: String) -> NSMenuItem {
+        let it = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        it.attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor])
+        it.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        it.isEnabled = false
+        return it
     }
 
     @objc private func setLanguage(_ sender: NSMenuItem) {
@@ -1165,7 +1170,7 @@ final class Controller: NSObject, NSMenuDelegate {
     @objc private func submitNow() {
         guard !busy else { return }
         busy = true
-        transient = t("action.submitting")
+        note(t("action.submitting"), kind: .info)
         render()
         workQueue.async { [weak self] in
             // Global flags must precede the subcommand; `submit --no-spinner`
@@ -1174,19 +1179,33 @@ final class Controller: NSObject, NSMenuDelegate {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.busy = false
-                if let result, result.status == 0 {
-                    self.transient = t("action.submitted", fmtClock(Date()))
+                let ok = result?.status == 0
+                if ok {
+                    self.note(t("action.submitted", fmtClock(Date())), kind: .success)
                 } else {
                     let reason = result.flatMap { CLI.firstLine($0.err) ?? CLI.firstLine($0.out) }
-                    self.transient = t("action.submitFailed", fmtClock(Date()))
-                        + (reason.map { " — " + clipDisplay($0, 48) } ?? "")
+                    self.note(t("action.submitFailed", fmtClock(Date()))
+                        + (reason.map { " — " + clipDisplay($0, 48) } ?? ""), kind: .failure)
                 }
                 self.render()
+                // The outcome of a button press should not be something the user has
+                // to go looking for: if the panel is shut, open it on the banner.
+                // A failure stays up until dismissed; a success clears itself.
+                if !DropdownPanel.shared.isShown {
+                    DropdownPanel.shared.show(self.panelData, from: self.statusItem.button)
+                }
                 // Server-side aggregation lags a moment behind the POST.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.refreshServer() }
-                self.clearTransient(after: 90)
+                if ok { self.clearTransient(after: 12) }
             }
         }
+    }
+
+    /// Sets the transient notice and how it reads, invalidating any pending clear.
+    private func note(_ message: String, kind: PanelNotice) {
+        transient = message
+        noticeKind = kind
+        noticeToken += 1
     }
 
     /// Opens the release page when an update is waiting, otherwise checks.
@@ -1364,6 +1383,12 @@ func runPanelPNG(path: String) -> Never {
     let page: PanelPage = args.contains("menu") ? .menu : .main
     var data = PanelData(config: config, rankMode: mode, server: server, local: local,
                          serverFailed: server == nil, busy: false, transient: nil)
+    // `notice success|failure|info <text>` forces the banner, which otherwise
+    // only appears for a second or two after a real submit.
+    if let i = args.firstIndex(of: "notice"), args.count > i + 2 {
+        data.noticeKind = ["success": .success, "failure": .failure][args[i + 1]] ?? .info
+        data.transient = args[i + 2]
+    }
     // The actions page shows state the numbers do not carry.
     data.loginEnabled = LoginItem.isEnabled
     data.canSubmit = CLI.binary() != nil
@@ -1419,17 +1444,14 @@ func runPanelProbe(path: String?) -> Never {
     exit(0)
 }
 
-/// Prints the menu as a tree, both shapes, and exits.
+/// Prints the menu as a tree and exits.
 func runMenuDump() -> Never {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
     let controller = Controller()
     controller.start()
     DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-        print("⋯ button / right-click:")
-        for line in controller.menuTree(actionsOnly: true) { print("  " + line) }
-        print("\ntext fallback shape (numbers inline):")
-        for line in controller.menuTree(actionsOnly: false) { print("  " + line) }
+        for line in controller.menuTree() { print(line) }
         exit(0)
     }
     app.run()
@@ -1519,6 +1541,24 @@ if let i = CommandLine.arguments.firstIndex(of: "--set-login") {
     LoginItem.set(want != "off")
     print("login item: \(LoginItem.isEnabled ? "enabled" : "disabled") (\(LoginItem.plistPath))")
     exit(0)
+}
+
+// A LaunchAgent copy and a hand-launched copy are two separate launches as far
+// as Launch Services is concerned, so macOS runs both and you end up with two
+// icons in the menu bar polling the same API. Count our own bundle id and bow
+// out if an older instance is already up. Running the bare binary out of the
+// build directory has no bundle id, so this never gets in the way of a rebuild.
+if let bundleID = Bundle.main.bundleIdentifier {
+    let me = NSRunningApplication.current
+    let started = me.launchDate ?? Date()
+    let older = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        .first { $0.processIdentifier != me.processIdentifier
+                 && ($0.launchDate ?? .distantPast) <= started }
+    if let older {
+        let msg = "TokensBar is already running (pid \(older.processIdentifier)); exiting.\n"
+        FileHandle.standardError.write(Data(msg.utf8))
+        exit(0)
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
