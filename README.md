@@ -57,11 +57,12 @@ actions. The ⋯ button turns the panel to a second page rather than dropping a
 menu over it: submit, refresh, the rank and language switches as pills, a
 launch-at-login switch, the profile link, the update check, the tip page and
 Quit, with **‹ Actions & Settings** back at the top and the build version at the
-bottom. A right-click still pops the plain NSMenu, which carries the same verbs
-with their keyboard shortcuts. That menu is now one level deep: the numbers sit
-at the top of it, so the per-model breakdowns they open are a single click from
-the menu bar, and the rank and language choices are indented rows under a
-heading rather than submenus.
+bottom. The two are cleanly split now — left-click the icon for the panel,
+right-click it for the plain NSMenu, and nothing inside the panel reaches back
+into that menu. The menu keeps the same verbs and their keyboard shortcuts, one
+level deep: the numbers sit at the top of it, so the per-model breakdowns they
+open are a single click from the menu bar, and the rank and language choices are
+indented rows under a heading rather than submenus.
 
 <p align="center">
   <img src="docs/panel-actions.png" width="380" alt="The actions page inside the panel, light mode">

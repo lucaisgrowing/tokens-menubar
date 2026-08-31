@@ -917,8 +917,6 @@ final class Controller: NSObject, NSMenuDelegate {
             break
         case .profile:
             openProfile()
-        case .textMenu:
-            popMenu()
         case .history:
             guard let s = server, let from = s.contribStart, let to = s.contribEnd else { return }
             DropdownPanel.shared.close()

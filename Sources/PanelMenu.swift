@@ -109,8 +109,6 @@ final class PanelMenuView: NSView {
             kind: .action(.updates), hint: t("hint.updates"), accented: data.updateWaiting))
         out.append(MenuRow(symbol: "cup.and.saucer.fill", title: t("action.support"),
                            kind: .action(.support), hint: t("hint.support")))
-        out.append(MenuRow(symbol: "text.alignleft", title: t("action.numbers"),
-                           kind: .action(.textMenu), hint: t("hint.numbers")))
         out.append(MenuRow())
         out.append(MenuRow(symbol: "xmark.circle", title: t("action.quit"),
                            kind: .action(.quit), hint: t("hint.quit")))
@@ -326,11 +324,6 @@ final class PanelMenuView: NSView {
         let p = convert(event.locationInWindow, from: nil)
         guard let hit = regions(geometry()).first(where: { $0.0.contains(p) }) else { return }
         onAction?(hit.1)
-    }
-
-    /// Right-clicking still pops the plain menu, as it does on the numbers page.
-    override func rightMouseUp(with event: NSEvent) {
-        onAction?(.textMenu)
     }
 
     override func resetCursorRects() {

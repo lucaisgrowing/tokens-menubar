@@ -75,7 +75,6 @@ enum L10n {
         "action.checkUpdates": ("Check for Updates…", "检查更新"),
         "action.support": ("Buy Me a Coffee…", "请我喝杯咖啡…"),
         "action.language": ("Language", "语言"),
-        "action.numbers": ("All Numbers as Text", "全部数据（文本）"),
         "action.quit": ("Quit TokensBar", "退出 TokensBar"),
 
         "update.checking": ("Checking for updates…", "检查更新中…"),
@@ -133,8 +132,8 @@ enum L10n {
 
         // The footer line: what the pointer is over does, or how the panel works
         // when it is over nothing.
-        "panel.hint": ("Click a block for its detail view · right-click for the menu",
-                       "点任意区块看详情 · 右键打开菜单"),
+        "panel.hint": ("Click a block for detail · right-click the icon for the menu",
+                       "点任意区块看详情 · 右键图标打开菜单"),
         "hint.profile": ("Open your tokens.ci profile in the browser",
                          "在浏览器里打开 tokens.ci 主页"),
         "hint.menu": ("Actions and settings, on a page of this panel",
@@ -159,8 +158,6 @@ enum L10n {
         "hint.updates": ("Compare this build against the latest release",
                          "拿当前版本和最新 release 比一下"),
         "hint.support": ("USDT tip addresses, on either chain", "USDT 打赏地址，两条链都行"),
-        "hint.numbers": ("The plain text menu, for the keyboard and VoiceOver",
-                         "纯文字菜单，给键盘和 VoiceOver 用"),
         "hint.quit": ("Quit TokensBar", "退出 TokensBar"),
 
         "tooltip.localFailed": ("tokens CLI not found, or the local scan failed",

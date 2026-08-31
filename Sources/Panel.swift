@@ -22,8 +22,6 @@ enum PanelAction: Equatable {
     case toggleLogin
     case updates
     case support
-    /// Pops the plain NSMenu, which still carries every number as text.
-    case textMenu
     case quit
 }
 
@@ -42,7 +40,6 @@ extension PanelAction: CustomStringConvertible {
         case .toggleLogin: return "launch-at-login"
         case .updates: return "updates"
         case .support: return "support"
-        case .textMenu: return "text-menu"
         case .quit: return "quit"
         }
     }
@@ -844,12 +841,6 @@ final class PanelView: NSView {
         guard let hit = regions(geometry()).first(where: { $0.0.contains(p) }) else { return }
         if hit.1 == .submit && data.busy { return }
         onAction?(hit.1)
-    }
-
-    /// Right-clicking anywhere in the panel opens the plain menu, matching the
-    /// status item — that is still the route to the numbers as text.
-    override func rightMouseUp(with event: NSEvent) {
-        onAction?(.textMenu)
     }
 
     override func resetCursorRects() {
