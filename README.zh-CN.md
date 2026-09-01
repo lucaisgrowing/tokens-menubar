@@ -161,7 +161,11 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 ## 检查更新
 
-「检查更新」把当前 bundle 版本和 GitHub 最新 release 比一下。后台每天也会静默查一次，有新版时这个菜单项会变成下载链接。不会自动装任何东西。
+「检查更新」把当前 bundle 版本和 GitHub 最新 release 比一下。后台每天也会静默查一次，有新版时这个菜单项会变成安装链接。
+
+点一下就地更新：下载那个 release 的 `TokensBar.app.zip`，确认里面的 bundle 确实是它宣称的版本，替换掉正在运行的 app 并重启——不用开浏览器、不用解压、不用往 `/Applications` 拖，也不用再去掉隔离标记。会先弹窗确认，没点确认不会装任何东西。如果 app 所在目录当前账号写不进去，或者那个 release 没附 zip，就还是打开 release 页面，跟以前一样。
+
+这里的信任基础是到 GitHub 的 HTTPS。下载包没有做代码签名校验——构建是 ad-hoc 签名而非公证的，在同一个地址旁边再发一个 `SHA-256` 并不能多证明什么。
 
 ## 命令行
 
@@ -193,6 +197,10 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 # 拿当前版本和 GitHub 最新 release 比一下
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
+
+# 下载、校验并把最新 release 装到当前 bundle 上，然后重启
+# 跟菜单里那个更新走同一条路径，只是省掉点击和确认弹窗，所以拿副本试，别拿在用的那个
+./TokensBar.app/Contents/MacOS/TokensBar --self-update
 
 # 跑菜单里「立即提交」走的同一条路径，便于在终端复现失败；加 --dry-run 则不真的上报
 ./TokensBar.app/Contents/MacOS/TokensBar --submit [--dry-run]

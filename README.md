@@ -171,7 +171,11 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 
 ## Updates
 
-"Check for Updates…" compares the bundle version against the latest GitHub release. A daily background check runs too; when a newer release exists the menu item turns into a download link. Nothing is ever installed automatically.
+"Check for Updates…" compares the bundle version against the latest GitHub release. A daily background check runs too; when a newer release exists the menu item turns into an install link.
+
+Clicking it installs in place: it downloads that release's `TokensBar.app.zip`, checks the bundle inside really is the advertised version, swaps it for the running app and relaunches — no browser, no unzip, no drag into `/Applications`, and no quarantine flag to clear. It asks first, and nothing is ever installed without that confirmation. If the app sits somewhere this account cannot write, or the release has no zip attached, the release page opens instead, exactly as it did before.
+
+The trust here is HTTPS to GitHub. The download is not code-signature-verified, because the builds are ad-hoc signed rather than notarised — a `SHA-256` published alongside the same download would prove nothing extra.
 
 ## Command line
 
@@ -208,6 +212,11 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 
 # Compare this build against the latest GitHub release.
 ./TokensBar.app/Contents/MacOS/TokensBar --check-updates
+
+# Download, verify and install the latest release over this bundle, then relaunch.
+# Same path the update menu item takes, minus the click and the confirmation, so
+# point a throwaway copy at it rather than the app you use.
+./TokensBar.app/Contents/MacOS/TokensBar --self-update
 
 # Run the same submit the menu item runs, to reproduce a failure in a terminal.
 # Add --dry-run to send nothing.

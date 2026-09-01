@@ -711,6 +711,9 @@ final class Controller: NSObject, NSMenuDelegate {
     private var busy = false
     private var update: UpdateInfo?
     private var checkingUpdate = false
+    /// Set from the moment the download starts until the app is replaced, so the
+    /// menu item cannot start a second install over the top of the first.
+    private var installing = false
     private var lastServerFetch: Date?
     private var apiTimer: Timer?
     private var localTimer: Timer?
@@ -1064,7 +1067,7 @@ final class Controller: NSObject, NSMenuDelegate {
         let updates = actionItem(updateItemTitle(),
                                  symbol: updateWaiting ? "arrow.down.circle.fill" : "arrow.down.circle",
                                  action: #selector(updateItemClicked), key: "u")
-        updates.isEnabled = !checkingUpdate
+        updates.isEnabled = !checkingUpdate && !installing
         menu.addItem(updates)
 
         menu.addItem(actionItem(t("action.support"), symbol: "cup.and.saucer.fill",
@@ -1081,6 +1084,7 @@ final class Controller: NSObject, NSMenuDelegate {
     }
 
     private func updateItemTitle() -> String {
+        if installing { return t("update.installing", update?.latest ?? "") }
         if checkingUpdate { return t("update.checking") }
         if let u = update, u.isNewer { return t("update.openPage", u.latest) }
         return t("action.checkUpdates")
@@ -1211,13 +1215,52 @@ final class Controller: NSObject, NSMenuDelegate {
         noticeToken += 1
     }
 
-    /// Opens the release page when an update is waiting, otherwise checks.
+    /// Installs the waiting update, or checks for one when none is known yet.
     @objc private func updateItemClicked() {
-        if let u = update, u.isNewer, let url = URL(string: u.url) {
-            NSWorkspace.shared.open(url)
+        if let u = update, u.isNewer {
+            beginInstall(u)
             return
         }
         checkForUpdates(announce: true)
+    }
+
+    /// Downloads and installs in place, then quits so the swap script can take
+    /// over. Anything the installer cannot do — a release with no zip attached, an
+    /// app in a directory this account cannot write — falls back to the release
+    /// page, which is what every version before this one did for all cases.
+    private func beginInstall(_ info: UpdateInfo) {
+        guard !installing else { return }
+        guard let asset = info.asset, Installer.canReplace else {
+            if let url = URL(string: info.url) { NSWorkspace.shared.open(url) }
+            return
+        }
+        // Replacing the app and restarting it is not something to do behind the
+        // user's back, and an accessory app has to come forward to be seen.
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = t("update.confirmTitle", info.latest)
+        alert.informativeText = t("update.confirmBody", Installer.target.path)
+        alert.addButton(withTitle: t("update.confirmGo"))
+        alert.addButton(withTitle: t("update.cancel"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        installing = true
+        note(t("update.downloading", info.latest), kind: .info)
+        render()
+        Installer.install(asset: asset, expecting: info.latest) { [weak self] failure in
+            guard let self else { return }
+            if let failure {
+                self.installing = false
+                self.note(t("update.installFailed", failure.localizedDescription), kind: .failure)
+                self.render()
+                self.clearTransient(after: 30)
+                return
+            }
+            // The script is already waiting on this pid; quitting is what starts it.
+            self.note(t("update.installing", info.latest), kind: .info)
+            self.render()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { NSApp.terminate(nil) }
+        }
     }
 
     @objc private func openRow(_ sender: NSMenuItem) {
@@ -1473,6 +1516,47 @@ func runUpdateCheck() -> Never {
     }
     print("current: v\(info.current)  latest: \(info.latest)  newer: \(info.isNewer)")
     print("url: \(info.url)")
+    print("asset: \(info.asset?.absoluteString ?? "none")")
+    exit(0)
+}
+
+/// Runs the real install path headlessly, since the menu route needs a click and
+/// an alert. Point a throwaway copy of the app at it — the swap replaces whatever
+/// bundle this binary is running out of.
+///
+///     /tmp/copy/TokensBar.app/Contents/MacOS/TokensBar --self-update
+func runSelfUpdate() -> Never {
+    print("bundle: \(Installer.target.path)")
+    print("writable: \(Installer.canReplace)")
+    var result: UpdateInfo??
+    let check = DispatchSemaphore(value: 0)
+    Updates.check(on: .global()) { result = $0; check.signal() }
+    _ = check.wait(timeout: .now() + 30)
+    guard let info = result ?? nil, let asset = info.asset else {
+        print("no release asset to install")
+        exit(1)
+    }
+    print("installing \(info.latest) from \(asset.lastPathComponent)")
+    var failure: Installer.Failure??
+    let install = DispatchSemaphore(value: 0)
+    // The callback hops to the main queue, which this thread is blocking, so the
+    // wait has to happen off it.
+    DispatchQueue.global().async {
+        Installer.install(asset: asset, expecting: info.latest) { failure = $0; install.signal() }
+    }
+    let deadline = Date().addingTimeInterval(180)
+    while failure == nil, Date() < deadline {
+        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.1))
+    }
+    if let f = failure ?? nil {
+        print("failed: \(f.localizedDescription)")
+        exit(1)
+    }
+    guard failure != nil else {
+        print("timed out")
+        exit(1)
+    }
+    print("staged; exiting so the swap script can run")
     exit(0)
 }
 
@@ -1505,6 +1589,7 @@ func runContribPNG(path: String) -> Never {
 
 if CommandLine.arguments.contains("--dump") { runDump() }
 if CommandLine.arguments.contains("--check-updates") { runUpdateCheck() }
+if CommandLine.arguments.contains("--self-update") { runSelfUpdate() }
 
 /// Runs the same submit the menu item runs, through the same wrapper, so a
 /// failure can be reproduced from a terminal. Add `--dry-run` to send nothing.

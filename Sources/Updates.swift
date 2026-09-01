@@ -5,7 +5,11 @@ import Foundation
 struct UpdateInfo {
     let latest: String
     let current: String
+    /// The release page, for the cases the installer has to hand over to a browser.
     let url: String
+    /// The packaged app in that release, when it has one. A release published
+    /// without its zip still reports a version; it just cannot be installed.
+    let asset: URL?
     let isNewer: Bool
 }
 
@@ -47,8 +51,14 @@ enum Updates {
                   let tag = o["tag_name"] as? String
             else { return queue.async { done(nil) } }
             let page = o["html_url"] as? String ?? "https://github.com/\(repo)/releases/latest"
+            // The zip the release workflow attaches, by exact name: a release can
+            // carry other files, and the installer must not download one of those.
+            let asset = (o["assets"] as? [[String: Any]] ?? [])
+                .first { $0["name"] as? String == "TokensBar.app.zip" }
+                .flatMap { $0["browser_download_url"] as? String }
+                .flatMap(URL.init(string:))
             let current = currentVersion
-            let info = UpdateInfo(latest: tag, current: current, url: page,
+            let info = UpdateInfo(latest: tag, current: current, url: page, asset: asset,
                                   isNewer: isNewer(tag, than: current))
             queue.async { done(info) }
         }.resume()
