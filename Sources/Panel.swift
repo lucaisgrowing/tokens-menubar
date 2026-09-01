@@ -194,8 +194,9 @@ private struct PanelLayout {
     var hint = NSRect.zero
     var stamp = NSRect.zero
     var submit = NSRect.zero
-    /// The submit outcome banner, when there is one. Zero-height means no notice,
-    /// so the panel keeps its usual height the rest of the time.
+    /// The submit outcome badge, when there is one — it takes over the stamp's slot
+    /// beside the button rather than adding a row, so the panel never changes
+    /// height and the outcome lands where the eye already is after a click.
     var notice = NSRect.zero
     var rules: [CGFloat] = []
 }
@@ -235,6 +236,16 @@ extension NSView {
     func fill(_ rect: NSRect, radius: CGFloat, colour: NSColor) {
         colour.setFill()
         NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+    }
+
+    /// Inset by half the line width, so the stroke lands inside `rect` instead of
+    /// straddling its edge and going soft.
+    func stroke(_ rect: NSRect, radius: CGFloat, colour: NSColor, width: CGFloat = 1) {
+        colour.setStroke()
+        let path = NSBezierPath(roundedRect: rect.insetBy(dx: width / 2, dy: width / 2),
+                                xRadius: radius, yRadius: radius)
+        path.lineWidth = width
+        path.stroke()
     }
 
     /// SF Symbols are template images; drawn straight into a view they come out
@@ -294,9 +305,9 @@ final class PanelView: NSView {
     private var hasBoard: Bool { data.primary != nil }
     private var hasWeekBars: Bool { data.recent.contains { $0.tokens > 0 } }
 
-    /// Only a submit outcome earns the banner. A background notice — an update
-    /// check, say — stays on the timestamp line, which is where it never
-    /// interrupted anything.
+    /// Only a submit outcome earns the badge. A background notice — an update
+    /// check, say — stays on the timestamp line as plain grey text, which is where
+    /// it never interrupted anything.
     private var hasNotice: Bool { data.transient != nil && data.noticeKind != .info }
 
     var fittingHeight: CGFloat { geometry().height }
@@ -323,13 +334,6 @@ final class PanelView: NSView {
         y += 30
         l.rules.append(y)
         y += 13
-
-        // A submit outcome sits directly under the header, above the number it
-        // just changed. Without a notice the slot takes no space at all.
-        if hasNotice {
-            l.notice = NSRect(x: pad, y: y, width: inner, height: 30)
-            y += 30 + 13
-        }
 
         l.heroValue = NSRect(x: pad, y: y, width: inner - 96, height: 38)
         l.heroCost = NSRect(x: w - pad - 96, y: y + 13, width: 96, height: 20)
@@ -414,6 +418,14 @@ final class PanelView: NSView {
         let submitW = max(76, ceil(measure(submitTitle, font: buttonFont).width) + 34)
         l.submit = NSRect(x: w - pad - submitW, y: y, width: submitW, height: 24)
         l.stamp = NSRect(x: pad, y: y + 5, width: inner - submitW - 10, height: 14)
+        // The badge sits in the stamp's slot, sized to its own text and centred in
+        // the button's band. Wider than the space beside the button, and the text
+        // truncates rather than sliding under it.
+        if hasNotice {
+            let room = inner - submitW - 10
+            let width = min(room, ceil(measure(data.transient ?? "", font: badgeFont).width) + 36)
+            l.notice = NSRect(x: pad, y: y + 1, width: width, height: 22)
+        }
         y += 24 + 14
 
         l.height = y
@@ -463,6 +475,9 @@ final class PanelView: NSView {
     private let smallFont = NSFont.systemFont(ofSize: 11)
     private let captionFont = NSFont.systemFont(ofSize: 10, weight: .semibold)
     private let buttonFont = NSFont.systemFont(ofSize: 12, weight: .medium)
+    /// Semibold, and only a point smaller than the button it sits beside: the line
+    /// reporting on a press should not be lighter than the thing that was pressed.
+    private let badgeFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
 
     /// Uppercase reads as a label in English; Chinese has no case, so it is left
     /// alone rather than being spaced out artificially.
@@ -524,7 +539,6 @@ final class PanelView: NSView {
         }
 
         drawHeader(l)
-        if hasNotice { drawNotice(l) }
         drawHero(l)
         if hasBoard { drawBoard(l, accent: accent) }
         drawAverage(l, accent: accent)
@@ -546,26 +560,29 @@ final class PanelView: NSView {
         icon("ellipsis.circle", in: l.gear, size: 14, colour: .secondaryLabelColor)
     }
 
-    /// The submit outcome, as a tinted strip under the header. It used to share the
-    /// footer's timestamp line in plain secondary grey, which is where a panel puts
+    /// The submit outcome, as a tinted pill where the timestamp usually goes. It
+    /// used to be plain secondary grey on that line, which is where a panel puts
     /// things nobody needs to read — the one line reporting on a button the user
-    /// just pressed should not be the quietest thing on screen.
+    /// just pressed should not be the quietest thing on screen. Colour, a ring and
+    /// a glyph, in the corner the pointer is already in after the click.
     private func drawNotice(_ l: PanelLayout) {
         guard let message = data.transient else { return }
         let ok = data.noticeKind == .success
         let tint: NSColor = ok ? .systemGreen : .systemRed
-        fill(l.notice, radius: 7, colour: tint.withAlphaComponent(0.14))
-        // A bar down the leading edge, so the strip still reads as a notice for
-        // anyone who cannot separate the green wash from the red one.
-        fill(NSRect(x: l.notice.minX, y: l.notice.minY, width: 3, height: l.notice.height),
-             radius: 1.5, colour: tint)
+        let radius = l.notice.height / 2
+        fill(l.notice, radius: radius, colour: tint.withAlphaComponent(0.16))
+        // A ring as well as a wash: the wash alone is too faint to register on a
+        // bright wallpaper, and the outline is what carries the shape at a glance.
+        stroke(l.notice, radius: radius, colour: tint.withAlphaComponent(0.55), width: 1)
         icon(ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-             in: NSRect(x: l.notice.minX + 13, y: l.notice.midY - 8, width: 16, height: 16),
-             size: 12, colour: tint)
+             in: NSRect(x: l.notice.minX + 8, y: l.notice.midY - 7, width: 14, height: 14),
+             size: 11, colour: tint)
+        // The text takes the tint too. Label colour beside a coloured ring reads as
+        // a container someone forgot to fill in.
         text(message,
-             in: NSRect(x: l.notice.minX + 34, y: l.notice.midY - 8,
-                        width: l.notice.width - 44, height: 16),
-             font: .systemFont(ofSize: 12, weight: .medium), colour: .labelColor)
+             in: NSRect(x: l.notice.minX + 26, y: l.notice.midY - 7,
+                        width: l.notice.width - 34, height: 14),
+             font: badgeFont, colour: tint)
     }
 
     private func drawHero(_ l: PanelLayout) {
@@ -773,20 +790,23 @@ final class PanelView: NSView {
         text(hintText, in: l.hint, font: smallFont,
              colour: hovering ? .labelColor : .secondaryLabelColor)
 
-        let stamp: String
-        // A submit outcome has the banner up top now; repeating it here would say
-        // the same thing twice. Background notices still land on this line.
-        if let transient = data.transient, !hasNotice {
-            stamp = transient
+        // A submit outcome takes this slot as a badge; anything else is grey text.
+        if hasNotice {
+            drawNotice(l)
         } else {
-            var bits: [String] = []
-            if let d = data.localStamp { bits.append(t("stamp.local", fmtClock(d))) }
-            if let d = data.serverStamp { bits.append(t("stamp.server", fmtClock(d))) }
-            if data.serverFailed { bits.append(t("panel.serverFailedShort")) }
-            if data.isStale { bits.append("⚠") }
-            stamp = bits.joined(separator: "  ·  ")
+            let stamp: String
+            if let transient = data.transient {
+                stamp = transient
+            } else {
+                var bits: [String] = []
+                if let d = data.localStamp { bits.append(t("stamp.local", fmtClock(d))) }
+                if let d = data.serverStamp { bits.append(t("stamp.server", fmtClock(d))) }
+                if data.serverFailed { bits.append(t("panel.serverFailedShort")) }
+                if data.isStale { bits.append("⚠") }
+                stamp = bits.joined(separator: "  ·  ")
+            }
+            text(stamp, in: l.stamp, font: smallFont, colour: .secondaryLabelColor)
         }
-        text(stamp, in: l.stamp, font: smallFont, colour: .secondaryLabelColor)
 
         let onSubmit = hoveredHit.map { hits.indices.contains($0) && hits[$0].1 == .submit }
             ?? false

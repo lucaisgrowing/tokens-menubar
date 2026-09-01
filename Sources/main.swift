@@ -867,6 +867,11 @@ final class Controller: NSObject, NSMenuDelegate {
     private var panelData: PanelData {
         var data = PanelData(config: config, rankMode: rankMode, server: server, local: local,
                              serverFailed: serverFailed, busy: busy, transient: transient)
+        // Has to travel with `transient`. Without it PanelData keeps its .info
+        // default, hasNotice is never true, and every submit outcome falls through
+        // to the footer's grey stamp line — the banner only ever appeared under
+        // `--dump notice`, which sets this field by hand.
+        data.noticeKind = noticeKind
         data.loginEnabled = LoginItem.isEnabled
         data.updateTitle = updateItemTitle()
         data.updateWaiting = update?.isNewer == true

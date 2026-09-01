@@ -66,8 +66,11 @@ enum L10n {
 
         "action.submit": ("Submit Now (tokens submit)", "立即提交 (tokens submit)"),
         "action.submitting": ("Submitting…", "提交中…"),
-        "action.submitted": ("Submitted ✓ %@", "已提交 ✓ %@"),
-        "action.submitFailed": ("Submit failed ✗ %@", "提交失败 ✗ %@"),
+        // No tick or cross in the text: the panel's badge draws a glyph of its own,
+        // and two ticks in a row read as a typo. The plain menu still says which
+        // outcome it was in words.
+        "action.submitted": ("Submitted %@", "已提交 %@"),
+        "action.submitFailed": ("Submit failed %@", "提交失败 %@"),
         "action.refresh": ("Refresh", "刷新"),
         "action.rankMode": ("Rank Shown in Menu Bar", "菜单栏显示排名"),
         "action.openProfile": ("Open tokens.ci Profile", "打开 tokens.ci 主页"),
