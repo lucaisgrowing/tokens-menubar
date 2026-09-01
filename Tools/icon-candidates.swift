@@ -38,10 +38,11 @@ func roundedFont(_ size: CGFloat, _ weight: NSFont.Weight) -> NSFont {
 }
 
 enum Layout {
-    case stripBars      // menu bar strip on top, usage bars below
-    case stripWordmark  // menu bar strip on top, bolt + "tokens" below
-    case stripBigBolt   // menu bar strip on top, bolt filling the rest
-    case boltBars       // no strip: bolt over a row of bars
+    case stripBars          // menu bar strip on top, usage bars below
+    case stripWordmark      // menu bar strip on top, bolt + "tokens" below
+    case stripBigBolt       // menu bar strip on top, bolt filling the rest
+    case stripBarsWordmark  // menu bar strip on top, usage bars over "tokens"
+    case boltBars           // no strip: bolt over a row of bars
 }
 
 struct Style {
@@ -66,6 +67,8 @@ let styles: [Style] = [
           bolt: srgb(0xFFB830), bar: srgb(0xFFB830), layout: .stripWordmark),
     Style(name: "6 amber bolt over bars", bgTop: srgb(0x38414D), bgBottom: srgb(0x11151B),
           bolt: srgb(0xFFB830), bar: srgb(0xFFB830), layout: .boltBars),
+    Style(name: "7 graphite strip+bars+wordmark", bgTop: srgb(0x38414D), bgBottom: srgb(0x11151B),
+          bolt: srgb(0xFFB830), bar: srgb(0xFFB830), layout: .stripBarsWordmark),
 ]
 
 func drawIcon(_ style: Style, px: Int) -> CGImage {
@@ -100,7 +103,7 @@ func drawIcon(_ style: Style, px: Int) -> CGImage {
 
     if detailed {
         switch style.layout {
-        case .stripBars, .stripWordmark, .stripBigBolt:
+        case .stripBars, .stripWordmark, .stripBigBolt, .stripBarsWordmark:
             let stripH = box.height * 0.24
             let strip = CGRect(x: box.minX, y: box.maxY - stripH, width: box.width, height: stripH)
             cg.setFillColor(NSColor(white: 1, alpha: 0.10).cgColor)
@@ -142,6 +145,15 @@ func drawIcon(_ style: Style, px: Int) -> CGImage {
             case .stripWordmark:
                 drawBolt(cg, centre: CGPoint(x: field.midX, y: field.minY + field.height * 0.60),
                          pointSize: size * 0.30, colour: style.bolt, size: size)
+                drawWordmark(in: field, size: size)
+            case .stripBarsWordmark:
+                // The wordmark claims the bottom third, so the bars stand on top
+                // of it instead of being centred in the whole field.
+                let base = field.height * 0.36
+                let barField = CGRect(x: field.minX, y: field.minY + base,
+                                      width: field.width, height: field.height - base)
+                drawBars(cg, in: barField.insetBy(dx: box.width * 0.16, dy: barField.height * 0.14),
+                         colour: style.bar, size: size)
                 drawWordmark(in: field, size: size)
             default: break
             }

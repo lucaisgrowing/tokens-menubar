@@ -8,10 +8,10 @@
 //
 // Artwork: a graphite squircle standing in for a dark menu bar. A lighter strip
 // across the top carries the bolt glyph and a token count — the app's actual job
-// — and ascending amber bars fill the space below. Detail drops out as the canvas
-// shrinks: the count goes first, then the strip, leaving the bolt alone at 32px
-// and under, which is the same glyph the menu bar itself uses (SF Symbol
-// bolt.fill).
+// — with ascending amber bars below it and the "tokens" wordmark on the floor.
+// Detail drops out as the canvas shrinks: the lettering goes first, then the
+// strip, leaving the bolt alone at 32px and under, which is the same glyph the
+// menu bar itself uses (SF Symbol bolt.fill).
 
 import AppKit
 import Foundation
@@ -97,10 +97,10 @@ func drawIcon(px: Int) -> Data {
                               options: [])
     }
 
-    // Three tiers of detail. Below 64px the strip is a smear and the count is
+    // Three tiers of detail. Below 64px the strip is a smear and lettering is
     // noise, so those sizes fall back to the bolt on its own.
     let showsStrip = px >= 64
-    let showsCount = px >= 128
+    let showsLettering = px >= 128 // the count inside the strip, and the wordmark
 
     var barsTop = box.maxY
     if showsStrip {
@@ -119,12 +119,12 @@ func drawIcon(px: Int) -> Data {
 
         // Bolt and count travel as one centred group, the way they sit together
         // in the real menu bar.
-        let glyphPoint = stripHeight * (showsCount ? 0.62 : 0.74)
+        let glyphPoint = stripHeight * (showsLettering ? 0.62 : 0.74)
         let bolt = symbol("bolt.fill", pointSize: glyphPoint, colour: amberTop)
         let boltSize = bolt?.size ?? .zero
 
         var countText: NSAttributedString?
-        if showsCount {
+        if showsLettering {
             let pointSize = stripHeight * 0.52
             countText = NSAttributedString(string: "1.2M", attributes: [
                 .font: roundedFont(pointSize, weight: .semibold),
@@ -151,13 +151,29 @@ func drawIcon(px: Int) -> Data {
     }
 
     if showsStrip {
+        // "tokens" sits on the floor, so the bars stand on top of it rather than
+        // filling the field. At 64px there is no wordmark and they get it back.
+        var barsBottom = box.minY + box.height * 0.135
+        if showsLettering {
+            let pointSize = box.height * 0.14
+            let wordmark = NSAttributedString(string: "tokens", attributes: [
+                .font: roundedFont(pointSize, weight: .semibold),
+                .foregroundColor: NSColor(white: 1, alpha: 0.93),
+                .kern: pointSize * 0.04,
+            ])
+            let wordmarkSize = wordmark.size()
+            let baseline = box.minY + box.height * 0.075
+            wordmark.draw(at: NSPoint(x: box.midX - wordmarkSize.width / 2, y: baseline))
+            barsBottom = baseline + wordmarkSize.height + box.height * 0.055
+        }
+
         // Five ascending bars — a usage trend, and the same shape as the week
         // chart inside the panel.
         let sidePad = box.width * 0.145
         let region = CGRect(x: box.minX + sidePad,
-                            y: box.minY + box.height * 0.135,
+                            y: barsBottom,
                             width: box.width - sidePad * 2,
-                            height: (barsTop - box.height * 0.085) - (box.minY + box.height * 0.135))
+                            height: (barsTop - box.height * 0.085) - barsBottom)
         let heights: [CGFloat] = [0.30, 0.45, 0.61, 0.79, 1.0]
         let alphas: [CGFloat] = [0.62, 0.72, 0.83, 0.92, 1.0]
         let gapRatio: CGFloat = 0.42
