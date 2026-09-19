@@ -1,71 +1,34 @@
-// A small floating notice that drops under the menu-bar icon for a few seconds
-// and fades out — the ambient, in-app half of a rank move. No system permission,
-// no Notification Center: it shows whether or not the panel is open, then leaves.
+// A small frosted-glass notice that appears under the menu-bar icon for a few
+// seconds and fades out — the ambient, in-app half of a rank move. Width is
+// capped and the text wraps to more lines rather than stretching into a long
+// strip; no Notification Center, no permission.
 
 import AppKit
-
-private final class ToastView: NSView {
-    let message: String
-    let kind: PanelNotice
-
-    init(_ message: String, _ kind: PanelNotice) {
-        self.message = message
-        self.kind = kind
-        super.init(frame: .zero)
-    }
-    required init?(coder: NSCoder) { nil }
-
-    private let font = NSFont.systemFont(ofSize: 12.5, weight: .semibold)
-    static let height: CGFloat = 34
-    static let hPad: CGFloat = 16
-
-    func fittingWidth() -> CGFloat {
-        measure(message, font: font).width + Self.hPad * 2
-    }
-
-    override func draw(_ dirty: NSRect) {
-        let tint: NSColor = kind == .failure ? .systemRed
-            : kind == .success ? .systemGreen : .controlAccentColor
-        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let ink = isDark ? tint : (tint.blended(withFraction: 0.4, of: .black) ?? tint)
-        // A near-opaque capsule so the notice reads over any wallpaper.
-        let base = isDark ? NSColor(white: 0.16, alpha: 0.98)
-                          : NSColor(white: 0.99, alpha: 0.98)
-        let radius = bounds.height / 2
-        fill(bounds, radius: radius, colour: base)
-        stroke(bounds, radius: radius, colour: ink.withAlphaComponent(0.55), width: 1)
-        text(message,
-             in: NSRect(x: Self.hPad, y: bounds.midY - 8, width: bounds.width - Self.hPad * 2, height: 16),
-             font: font, colour: ink, align: .center)
-    }
-}
 
 final class Toast {
     static let shared = Toast()
     private var panel: NSPanel?
     private var hide: DispatchWorkItem?
 
-    /// Drops a notice under `anchor` (the status-bar button), fades it in, and
+    private let maxWidth: CGFloat = 260
+    private let hPad: CGFloat = 15
+    private let vPad: CGFloat = 11
+    private let font = NSFont.systemFont(ofSize: 12.5, weight: .semibold)
+
+    /// Shows a notice under `anchor` (the status-bar button), fades it in, and
     /// clears it after a few seconds. A newer toast replaces the one showing.
     func show(_ message: String, kind: PanelNotice, near anchor: NSView?) {
-        let view = ToastView(message, kind)
-        let width = min(max(view.fittingWidth(), 120), 460)
-        let size = NSSize(width: width, height: ToastView.height)
-
+        let size = fittingSize(for: message)
         let panel = self.panel ?? makePanel()
         self.panel = panel
         panel.setContentSize(size)
-        view.frame = NSRect(origin: .zero, size: size)
-        panel.contentView = view
-
+        panel.contentView = content(message, kind: kind, size: size)
         panel.setFrameOrigin(origin(for: size, near: anchor))
+
         hide?.cancel()
         panel.alphaValue = 0
         panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.16
-            panel.animator().alphaValue = 1
-        }
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.16; panel.animator().alphaValue = 1 }
         let work = DispatchWorkItem { [weak self] in self?.dismiss() }
         hide = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
@@ -73,10 +36,52 @@ final class Toast {
 
     private func dismiss() {
         guard let panel else { return }
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.3
-            panel.animator().alphaValue = 0
-        }, completionHandler: { panel.orderOut(nil) })
+        NSAnimationContext.runAnimationGroup({ $0.duration = 0.3; panel.animator().alphaValue = 0 },
+                                             completionHandler: { panel.orderOut(nil) })
+    }
+
+    /// Wraps the text at the capped width and sizes the box to the result, so a
+    /// long message grows downward in lines rather than sideways into a strip.
+    private func fittingSize(for message: String) -> NSSize {
+        let textMax = maxWidth - hPad * 2
+        let bounds = (message as NSString).boundingRect(
+            with: NSSize(width: textMax, height: 400),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font])
+        let w = min(ceil(bounds.width), textMax) + hPad * 2
+        let h = max(34, ceil(bounds.height) + vPad * 2)
+        return NSSize(width: w, height: h)
+    }
+
+    private func content(_ message: String, kind: PanelNotice, size: NSSize) -> NSView {
+        let tint: NSColor = kind == .failure ? .systemRed
+            : kind == .success ? .systemGreen : .controlAccentColor
+
+        // Frosted glass: the blur adapts to light/dark on its own, so the notice
+        // sits over any wallpaper. Rounded by clipping the effect view's layer.
+        let blur = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+        blur.material = .popover
+        blur.blendingMode = .behindWindow
+        blur.state = .active
+        blur.wantsLayer = true
+        blur.layer?.cornerRadius = 12
+        blur.layer?.masksToBounds = true
+        blur.layer?.borderWidth = 1
+        blur.layer?.borderColor = tint.withAlphaComponent(0.5).cgColor
+
+        let isDark = blur.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let ink = isDark ? tint : (tint.blended(withFraction: 0.4, of: .black) ?? tint)
+
+        let label = NSTextField(labelWithString: message)
+        label.font = font
+        label.textColor = ink
+        label.alignment = .center
+        label.maximumNumberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.frame = NSRect(x: hPad, y: vPad, width: size.width - hPad * 2, height: size.height - vPad * 2)
+        label.autoresizingMask = [.width, .height]
+        blur.addSubview(label)
+        return blur
     }
 
     private func makePanel() -> NSPanel {
@@ -93,7 +98,7 @@ final class Toast {
     }
 
     /// Just below the menu bar, its right edge under the status item, clamped to
-    /// the screen so a narrow item near the corner does not push it off-screen.
+    /// the screen. The capped width keeps it from reaching far to the left.
     private func origin(for size: NSSize, near anchor: NSView?) -> NSPoint {
         let screen = (anchor?.window?.screen ?? NSScreen.main)?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
