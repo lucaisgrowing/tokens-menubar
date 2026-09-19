@@ -268,6 +268,16 @@ func todayChartModels(_ local: LocalStats, _ server: ServerStats?) -> [ModelSlic
     return fromServer.isEmpty ? local.todayModels : fromServer
 }
 
+/// This month's spend projected to the month's end at the current daily pace.
+/// 0 when nothing has been spent yet, so callers can treat 0 as "no projection".
+func projectMonthEnd(_ monthCost: Double) -> Double {
+    guard monthCost > 0 else { return 0 }
+    let cal = Calendar.current, now = Date()
+    let day = cal.component(.day, from: now)
+    let days = cal.range(of: .day, in: .month, for: now)?.count ?? 30
+    return day > 0 ? monthCost / Double(day) * Double(days) : 0
+}
+
 // MARK: - JSON helpers
 
 func num(_ o: [String: Any]?, _ key: String) -> NSNumber? { o?[key] as? NSNumber }
@@ -673,12 +683,8 @@ struct Presenter {
 
     /// This month's spend projected to the month's end at the current daily pace.
     var monthProjection: Double? {
-        guard local.monthCost > 0 else { return nil }
-        let cal = Calendar.current, now = Date()
-        let day = cal.component(.day, from: now)
-        let days = cal.range(of: .day, in: .month, for: now)?.count ?? 30
-        guard day > 0 else { return nil }
-        return local.monthCost / Double(day) * Double(days)
+        let p = projectMonthEnd(local.monthCost)
+        return p > 0 ? p : nil
     }
 
     var title: String {

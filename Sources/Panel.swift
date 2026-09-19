@@ -64,6 +64,12 @@ struct PanelData {
     var lifetimeCost = 0.0
     var weekTokens = 0
     var weekCost = 0.0
+    var monthTokens = 0
+    var monthCost = 0.0
+    /// Month-end spend at today's pace; 0 when there is nothing to project.
+    var monthProjection = 0.0
+    /// The configured daily-spend budget in USD; 0 when off.
+    var dailyBudget = 0.0
     /// The board the menu bar shows, and the other one.
     var primaryMode: RankMode = .today
     var primary: BoardStanding?
@@ -89,6 +95,14 @@ struct PanelData {
     var updateTitle = ""
     var updateWaiting = false
     var canSubmit = true
+
+    /// How far today's spend is over the budget: 0 = under or off, 1 = past it,
+    /// 2 = well past (≥1.5×). Drives the amber/red on the today figure.
+    var budgetSeverity: Int {
+        guard dailyBudget > 0 else { return 0 }
+        let ratio = todayCost / dailyBudget
+        return ratio >= 1.5 ? 2 : ratio >= 1 ? 1 : 0
+    }
 }
 
 extension PanelData {
@@ -117,6 +131,10 @@ extension PanelData {
         lifetimeCost = server?.totalCost ?? 0
         weekTokens = local.weekTokens
         weekCost = local.weekCost
+        monthTokens = local.monthTokens
+        monthCost = local.monthCost
+        monthProjection = projectMonthEnd(local.monthCost)
+        dailyBudget = config.dailyCostBudget
 
         let all = server?.contribs ?? []
         recent = PanelData.trailing(all, days: 7)
@@ -189,6 +207,11 @@ private struct PanelLayout {
     var modelCaption = NSRect.zero
     var modelValue = NSRect.zero
     var modelRows: [NSRect] = []
+    /// This month's total, its month-end projection, and an over-budget line.
+    var monthCaption = NSRect.zero
+    var monthValue = NSRect.zero
+    var monthProj = NSRect.zero
+    var budgetLine = NSRect.zero
     /// What the pointer is over does, or how to use the panel when it is over
     /// nothing.
     var hint = NSRect.zero
@@ -397,6 +420,25 @@ final class PanelView: NSView {
             y += 13
         }
 
+        // This month, a caption/value row like the week's, with the projection and
+        // an over-budget line under it when they apply.
+        if data.monthCost > 0 {
+            l.monthCaption = NSRect(x: pad, y: y, width: inner - 150, height: 13)
+            l.monthValue = NSRect(x: w - pad - 150, y: y - 1, width: 150, height: 15)
+            y += 20
+            if data.monthProjection > 0 {
+                l.monthProj = NSRect(x: pad, y: y, width: inner, height: 13)
+                y += 16
+            }
+            if data.budgetSeverity > 0 {
+                l.budgetLine = NSRect(x: pad, y: y, width: inner, height: 13)
+                y += 16
+            }
+            y += 6
+            l.rules.append(y)
+            y += 13
+        }
+
         if !slices.isEmpty {
             l.modelCaption = NSRect(x: pad, y: y, width: inner - 90, height: 13)
             l.modelValue = NSRect(x: w - pad - 90, y: y, width: 90, height: 13)
@@ -544,6 +586,7 @@ final class PanelView: NSView {
         drawAverage(l, accent: accent)
         drawCards(l)
         if hasWeekBars { drawWeek(l, accent: accent) }
+        if data.monthCost > 0 { drawMonth(l, accent: accent) }
         if !l.modelRows.isEmpty { drawModels(l) }
         drawFooter(l, accent: accent)
     }
@@ -697,6 +740,27 @@ final class PanelView: NSView {
         card(l.cards[1], caption: caption(t("row.week")),
              value: data.localFailed ? "—" : fmtTokens(data.weekTokens),
              sub: data.localFailed ? t("panel.localFailed") : fmtMoney(data.weekCost))
+    }
+
+    /// This month's total on a caption/value row like the week's, with the
+    /// month-end projection under it and an over-budget line when the day's spend
+    /// has crossed the configured budget — amber past it, red at 1.5×.
+    private func drawMonth(_ l: PanelLayout, accent: NSColor) {
+        text(caption(t("row.month")), in: l.monthCaption, font: captionFont,
+             colour: .secondaryLabelColor)
+        let value = "\(fmtTokens(data.monthTokens))  ·  \(fmtMoney(data.monthCost))"
+        text(value, in: l.monthValue,
+             font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+             colour: .secondaryLabelColor, align: .right)
+        if l.monthProj != .zero {
+            text(t("month.projected", fmtMoney(data.monthProjection)),
+                 in: l.monthProj, font: smallFont, colour: .secondaryLabelColor)
+        }
+        if l.budgetLine != .zero {
+            text(t("budget.over", fmtMoney(data.todayCost), fmtMoney(data.dailyBudget)),
+                 in: l.budgetLine, font: smallFont,
+                 colour: data.budgetSeverity >= 2 ? .systemRed : .systemOrange)
+        }
     }
 
     private func drawWeek(_ l: PanelLayout, accent: NSColor) {
