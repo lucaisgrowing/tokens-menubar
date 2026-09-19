@@ -264,8 +264,56 @@ enum CLI {
     ]
 
     /// GUI apps do not inherit the shell PATH, so probe the known install sites.
+    ///
+    /// Being executable is not enough to be usable: an x86_64 build from the
+    /// /usr/local Homebrew is marked executable but cannot launch at all on an
+    /// Apple silicon Mac without Rosetta, and since /usr/local sorts first it
+    /// would shadow a working native install. Prefer a slice this Mac can run,
+    /// and only fall back to an unusable one so `run` can report why it failed.
     static func binary() -> String? {
-        candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+        let usable = candidates.filter { FileManager.default.isExecutableFile(atPath: $0) }
+        return usable.first { runsNatively($0) } ?? usable.first
+    }
+
+    private static let nativeCPUType: UInt32 = {
+        #if arch(arm64)
+        return 0x0100_000C  // CPU_TYPE_ARM64
+        #else
+        return 0x0100_0007  // CPU_TYPE_X86_64
+        #endif
+    }()
+
+    /// Whether `path` is a Mach-O carrying a slice for this Mac's architecture,
+    /// read from the header rather than by launching it — the menu asks this on
+    /// every render, so it has to stay cheap and side-effect free.
+    static func runsNatively(_ path: String) -> Bool {
+        guard let h = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? h.close() }
+        guard let head = try? h.read(upToCount: 4096) else { return false }
+        let bytes = [UInt8](head)
+        func u32(_ o: Int, bigEndian: Bool) -> UInt32? {
+            guard o + 4 <= bytes.count else { return nil }
+            let v = (UInt32(bytes[o]) << 24) | (UInt32(bytes[o + 1]) << 16)
+                | (UInt32(bytes[o + 2]) << 8) | UInt32(bytes[o + 3])
+            return bigEndian ? v : v.byteSwapped
+        }
+        guard let magic = u32(0, bigEndian: true) else { return false }
+        switch magic {
+        case 0xCAFE_BABE, 0xCAFE_BABF:
+            // Universal: counts and cputypes are always big-endian on disk.
+            guard let count = u32(4, bigEndian: true) else { return false }
+            let stride = magic == 0xCAFE_BABF ? 32 : 20  // fat_arch_64 vs fat_arch
+            return (0..<Int(count)).contains {
+                u32(8 + $0 * stride, bigEndian: true) == nativeCPUType
+            }
+        case 0xFEED_FACE, 0xFEED_FACF:
+            return u32(4, bigEndian: true) == nativeCPUType
+        case 0xCEFA_EDFE, 0xCFFA_EDFE:  // the same headers byte-swapped
+            return u32(4, bigEndian: false) == nativeCPUType
+        default:
+            // Not Mach-O — a shim script, say. Give it the benefit of the doubt.
+            return true
+        }
     }
 
     /// Runs the CLI and returns its output and exit code. stderr is captured on
@@ -284,7 +332,14 @@ enum CLI {
         p.standardOutput = out
         p.standardError = err
         p.standardInput = FileHandle.nullDevice
-        do { try p.run() } catch { return nil }
+        do { try p.run() } catch {
+            // A candidate can be executable yet unlaunchable — an x86_64 build on
+            // a Mac with no Rosetta fails here with EBADARCH. Report it as a run
+            // that failed, with the reason, instead of as nothing at all: the
+            // caller's only other option is an unexplained "submit failed".
+            let why = "\(bin): \(error.localizedDescription)"
+            return (Data(), Data(why.utf8), -1)
+        }
 
         let errData = DispatchGroup()
         var captured = Data()
