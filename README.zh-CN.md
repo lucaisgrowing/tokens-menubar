@@ -23,6 +23,8 @@
 
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
+> **macOS 27 · Apple silicon：** Rosetta 2 没了，所以 `tokens` CLI 必须是原生 **arm64** 版 —— 在 Apple silicon 的 Homebrew 上 `brew install owo-network/brew/tokens`。Intel Homebrew 留下的 x86_64 版 `tokens` 根本起不来；1.9.1 起 TokensBar 会跳过它、并显示原因，而不是光秃秃一句「提交失败」。
+
 <p align="center">
   <img src="docs/menu.png" width="380" alt="TokensBar 下拉面板（浅色）">
   <img src="docs/menu-dark.png" width="380" alt="TokensBar 下拉面板（深色）">
@@ -106,8 +108,6 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 brew install owo-network/brew/tokens
 tokens login
 ```
-
-> **Apple silicon 上，macOS 27 移除了 Rosetta 2**，所以 x86_64 版的 `tokens`（比如 `/usr/local` 下 Intel Homebrew 留下的那个）根本起不来。请装原生 arm64 版（`/opt/homebrew` 里的 arm64 Homebrew 装 `owo-network/brew/tokens` 就是）。PATH 上有多个 `tokens` 时 TokensBar 会挑能跑的那个；一个都跑不动时会在提交横幅里显示原因，而不是光秃秃一句「提交失败」。
 
 ## 安装
 

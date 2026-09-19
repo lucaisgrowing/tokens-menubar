@@ -23,6 +23,8 @@
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
+> **macOS 27 · Apple silicon:** Rosetta 2 is gone, so the `tokens` CLI must be a native **arm64** build — `brew install owo-network/brew/tokens` on an Apple silicon Homebrew. A leftover x86_64 `tokens` from an Intel Homebrew won't launch; since 1.9.1 TokensBar skips it and shows the reason instead of a bare "submit failed".
+
 <p align="center">
   <img src="docs/menu.png" width="380" alt="The TokensBar dropdown panel in light mode">
   <img src="docs/menu-dark.png" width="380" alt="The TokensBar dropdown panel in dark mode">
@@ -116,8 +118,6 @@ The [`tokens`](https://github.com/missuo/tokens) CLI, installed and logged in:
 brew install owo-network/brew/tokens
 tokens login
 ```
-
-> **On Apple silicon, macOS 27 removed Rosetta 2**, so an x86_64 `tokens` — say one left behind by an Intel Homebrew in `/usr/local` — will not launch at all. Install the native arm64 build (the `owo-network/brew/tokens` from an arm64 Homebrew in `/opt/homebrew` is one). TokensBar picks a runnable slice when more than one `tokens` is on the path, and shows the reason in the submit banner if none can run instead of a bare "submit failed".
 
 ## Install
 
