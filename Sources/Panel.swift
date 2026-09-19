@@ -629,20 +629,25 @@ final class PanelView: NSView {
         guard let message = data.transient else { return }
         let ok = data.noticeKind == .success
         let tint: NSColor = ok ? .systemGreen : .systemRed
+        // The glyph and text want a deeper shade than the wash: system green reads
+        // as too pale on the light panel. Darken it in light mode; in dark mode the
+        // same darkening would sink into the background, so leave it.
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let ink = isDark ? tint : (tint.blended(withFraction: 0.4, of: .black) ?? tint)
         let radius = l.notice.height / 2
         fill(l.notice, radius: radius, colour: tint.withAlphaComponent(0.16))
         // A ring as well as a wash: the wash alone is too faint to register on a
         // bright wallpaper, and the outline is what carries the shape at a glance.
-        stroke(l.notice, radius: radius, colour: tint.withAlphaComponent(0.55), width: 1)
+        stroke(l.notice, radius: radius, colour: ink.withAlphaComponent(0.55), width: 1)
         icon(ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
              in: NSRect(x: l.notice.minX + 8, y: l.notice.midY - 7, width: 14, height: 14),
-             size: 11, colour: tint)
+             size: 11, colour: ink)
         // The text takes the tint too. Label colour beside a coloured ring reads as
         // a container someone forgot to fill in.
         text(message,
              in: NSRect(x: l.notice.minX + 26, y: l.notice.midY - 7,
                         width: l.notice.width - 34, height: 14),
-             font: badgeFont, colour: tint)
+             font: badgeFont, colour: ink)
     }
 
     private func drawHero(_ l: PanelLayout) {

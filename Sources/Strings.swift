@@ -49,6 +49,7 @@ enum L10n {
         "row.month": ("This month", "本月"),
         "month.projected": ("↳ ~%@ projected at today's pace", "↳ 按当前节奏预计 ~%@"),
         "panel.activeDays": ("Active days  %d", "活跃天数  %d 天"),
+        "notify.body": ("%@ · tokens.ci", "%@ · tokens.ci"),
         "budget.over": ("⚠ today %1$@ · over the %2$@ budget", "⚠ 今日 %1$@ · 超出预算 %2$@"),
 
         "state.notLoggedIn": ("Not signed in", "未登录"),

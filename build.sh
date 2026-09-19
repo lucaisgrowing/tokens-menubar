@@ -27,7 +27,7 @@ fi
 compile() { # $1 = arch, $2 = output path
   swiftc -O -swift-version 5 \
     -target "$1-apple-macos$DEPLOY_TARGET" \
-    -framework AppKit \
+    -framework AppKit -framework UserNotifications \
     -o "$2" "$DIR"/Sources/*.swift
 }
 

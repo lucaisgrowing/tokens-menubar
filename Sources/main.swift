@@ -902,6 +902,7 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         menu.delegate = self
         DropdownPanel.shared.onAction = { [weak self] action in self?.handle(action) }
+        Notifier.requestAuthorization()
         render()
 
         refreshLocal()
@@ -966,26 +967,36 @@ final class Controller: NSObject, NSMenuDelegate {
         guard prevRank > 0, curRank > 0, curRank != prevRank else { return }
 
         let badge = "\(mode.badge)\(curRank)"
+        let message: String
+        let chip: String
+        let kind: PanelNotice
         if curRank < prevRank {
             let up = prevRank - curRank
+            kind = .success
             if curRank == 1 {
-                note(t(mode == .today ? "move.firstToday" : "move.firstAll"), kind: .success)
-                flashMenuBar("👑")
+                message = t(mode == .today ? "move.firstToday" : "move.firstAll")
+                chip = "👑"
             } else if let passed = prevAbove,
                       stats.standing(mode)?.above?.username != prevAbove {
                 // Climbed past the exact person who had been ahead — the best kind.
-                note(t("move.passed", passed, badge, up), kind: .success)
-                flashMenuBar("🎉+\(up)")
+                message = t("move.passed", passed, badge, up)
+                chip = "🎉+\(up)"
             } else {
-                note(t("move.up", badge, up), kind: .success)
-                flashMenuBar("🚀+\(up)")
+                message = t("move.up", badge, up)
+                chip = "🚀+\(up)"
             }
         } else {
-            note(t("move.down", badge, curRank - prevRank), kind: .info)
-            flashMenuBar("▽\(curRank - prevRank)")
+            let down = curRank - prevRank
+            message = t("move.down", badge, down)
+            chip = "▽\(down)"
+            kind = .info
         }
-        // A background move must not steal focus by throwing the panel open; the
-        // menu-bar chip carries it at a glance, the banner waits inside the panel.
+        note(message, kind: kind)
+        flashMenuBar(chip)
+        // The banner only shows once the panel is open and the chip fades in a few
+        // seconds — a real notification is what actually reaches someone who is not
+        // looking at the menu bar.
+        Notifier.post(title: message, body: t("notify.body", "@" + config.username))
         clearTransient(after: 15)
     }
 
@@ -1537,7 +1548,16 @@ final class Controller: NSObject, NSMenuDelegate {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
         note(notice, kind: .success)
-        render(); clearTransient(after: 8)
+        render(); showCopyFeedback(); clearTransient(after: 8)
+    }
+
+    /// The card copies live on the panel's actions page, whose footer does not
+    /// carry the banner — so a copy there would look like nothing happened. Turn
+    /// back to the main page where the banner shows, and flash the menu bar too so
+    /// the confirmation lands whether the panel is open or not.
+    private func showCopyFeedback() {
+        if DropdownPanel.shared.isShown { DropdownPanel.shared.turn(to: .main) }
+        flashMenuBar("📋")
     }
 
     /// The official live-card embed, as the README snippet the site's dialog copies.
@@ -1559,13 +1579,13 @@ final class Controller: NSObject, NSMenuDelegate {
         guard let png = ShareCardView.render(config: config, server: server, dark: menuBarIsDark),
               let image = NSImage(data: png) else {
             note(t("card.failed"), kind: .failure)
-            render(); clearTransient(after: 8)
+            render(); showCopyFeedback(); clearTransient(after: 8)
             return
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([image])
         note(t("card.copiedImage"), kind: .success)
-        render(); clearTransient(after: 8)
+        render(); showCopyFeedback(); clearTransient(after: 8)
     }
 
     @objc private func openSupport() {
