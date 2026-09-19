@@ -32,6 +32,9 @@ struct Config {
     /// Colour the menu-bar readout when today's spend crosses this many USD.
     /// 0 turns it off. Amber at the line, red at 1.5× it.
     var dailyCostBudget: Double = 0
+    /// What the menu-bar line shows, in order — any of "tokens", "cost", "rank".
+    /// Defaults to today's tokens then the rank; some people want only the spend.
+    var menuBarItems: [String] = ["tokens", "rank"]
 
     static let configPath = NSHomeDirectory() + "/.config/tokens-menubar/config.json"
     static let credentialsPath = NSHomeDirectory() + "/.config/tokens/credentials.json"
@@ -54,6 +57,10 @@ struct Config {
         if let v = o["language"] as? String, let l = Lang(rawValue: v) { cfg.language = l }
         if let v = o["supportURL"] as? String, !v.isEmpty { cfg.supportURL = v }
         if let v = (o["dailyCostBudget"] as? NSNumber)?.doubleValue, v >= 0 { cfg.dailyCostBudget = v }
+        if let arr = o["menuBarItems"] as? [String] {
+            let picked = arr.filter { ["tokens", "cost", "rank"].contains($0) }
+            if !picked.isEmpty { cfg.menuBarItems = picked }
+        }
         return cfg
     }
 
@@ -676,14 +683,24 @@ struct Presenter {
 
     var title: String {
         var parts: [String] = []
-        if let d = serverToday { parts.append(fmtTokens(d.tokens)) }
-        else { parts.append(local.failed ? "—" : fmtTokens(local.todayTokens)) }
-        if let st = server?.standing(rankMode) {
-            parts.append(st.rank > 0 ? "\(rankMode.badge)\(st.rank)" : "\(rankMode.badge)—")
-        } else if serverFailed {
-            parts.append("#?")
+        for item in config.menuBarItems {
+            switch item {
+            case "tokens":
+                if let d = serverToday { parts.append(fmtTokens(d.tokens)) }
+                else { parts.append(local.failed ? "—" : fmtTokens(local.todayTokens)) }
+            case "cost":
+                parts.append(local.failed && serverToday == nil ? "—" : fmtMoney(todayCost))
+            case "rank":
+                if let st = server?.standing(rankMode) {
+                    parts.append(st.rank > 0 ? "\(rankMode.badge)\(st.rank)" : "\(rankMode.badge)—")
+                } else if serverFailed {
+                    parts.append("#?")
+                }
+            default: break
+            }
         }
-        return parts.joined(separator: "  ")
+        // Never blank the menu bar — the bolt would sit alone with no readout.
+        return parts.isEmpty ? "⚡" : parts.joined(separator: "  ")
     }
 
     var tooltip: String {
