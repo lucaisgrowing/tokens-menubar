@@ -29,6 +29,9 @@ struct Config {
     var menuBarRank: RankMode = .allTime
     /// Initial UI language; the menu can override it.
     var language: Lang = .en
+    /// Colour the menu-bar readout when today's spend crosses this many USD.
+    /// 0 turns it off. Amber at the line, red at 1.5× it.
+    var dailyCostBudget: Double = 0
 
     static let configPath = NSHomeDirectory() + "/.config/tokens-menubar/config.json"
     static let credentialsPath = NSHomeDirectory() + "/.config/tokens/credentials.json"
@@ -50,6 +53,7 @@ struct Config {
         if let v = o["menuBarRank"] as? String, let m = RankMode(rawValue: v) { cfg.menuBarRank = m }
         if let v = o["language"] as? String, let l = Lang(rawValue: v) { cfg.language = l }
         if let v = o["supportURL"] as? String, !v.isEmpty { cfg.supportURL = v }
+        if let v = (o["dailyCostBudget"] as? NSNumber)?.doubleValue, v >= 0 { cfg.dailyCostBudget = v }
         return cfg
     }
 
@@ -241,6 +245,8 @@ struct LocalStats {
     var todayCost = 0.0
     var weekTokens = 0
     var weekCost = 0.0
+    var monthTokens = 0
+    var monthCost = 0.0
     /// Per-model breakdown of today, for the donut chart.
     var todayModels: [ModelSlice] = []
     var updatedAt: Date?
@@ -644,6 +650,30 @@ struct Presenter {
     /// because it is live.
     private var serverToday: ContribDay? { server?.todayDay }
 
+    /// Today's spend — the server's all-device figure when there is one, else the
+    /// live local scan. The basis for the budget colour.
+    private var todayCost: Double { serverToday?.cost ?? local.todayCost }
+
+    /// How far today's spend is over the configured budget: 0 = under or off,
+    /// 1 = past it (amber), 2 = well past it, ≥1.5× (red).
+    var budgetSeverity: Int {
+        guard config.dailyCostBudget > 0 else { return 0 }
+        let ratio = todayCost / config.dailyCostBudget
+        if ratio >= 1.5 { return 2 }
+        if ratio >= 1.0 { return 1 }
+        return 0
+    }
+
+    /// This month's spend projected to the month's end at the current daily pace.
+    var monthProjection: Double? {
+        guard local.monthCost > 0 else { return nil }
+        let cal = Calendar.current, now = Date()
+        let day = cal.component(.day, from: now)
+        let days = cal.range(of: .day, in: .month, for: now)?.count ?? 30
+        guard day > 0 else { return nil }
+        return local.monthCost / Double(day) * Double(days)
+    }
+
     var title: String {
         var parts: [String] = []
         if let d = serverToday { parts.append(fmtTokens(d.tokens)) }
@@ -670,6 +700,11 @@ struct Presenter {
                                        : t("tooltip.rankTodayNone"))
             }
         }
+        if local.monthCost > 0 {
+            bits.append(t("tooltip.month", fmtMoney(local.monthCost)))
+            if let p = monthProjection { bits.append(t("tooltip.projected", fmtMoney(p))) }
+        }
+        if budgetSeverity > 0 { bits.append(t("tooltip.overBudget", fmtMoney(config.dailyCostBudget))) }
         return bits.joined(separator: "\n")
     }
 
@@ -943,6 +978,7 @@ final class Controller: NSObject, NSMenuDelegate {
         workQueue.async { [weak self] in
             let today = CLI.report(["--today"])
             let week = CLI.report(["--week"])
+            let month = CLI.report(["--month"])
             DispatchQueue.main.async {
                 guard let self else { return }
                 if today == nil && week == nil {
@@ -955,6 +991,7 @@ final class Controller: NSObject, NSMenuDelegate {
                         self.local.todayModels = today.models
                     }
                     if let week { self.local.weekTokens = week.tokens; self.local.weekCost = week.cost }
+                    if let month { self.local.monthTokens = month.tokens; self.local.monthCost = month.cost }
                     self.local.updatedAt = Date()
                 }
                 self.render()
@@ -1032,9 +1069,16 @@ final class Controller: NSObject, NSMenuDelegate {
 
     private func render() {
         let p = presenter
+        var attrs: [NSAttributedString.Key: Any] = [.font: monoFont]
+        // Over the daily budget, the readout goes amber, then red — the whole
+        // point of a menu-bar app is that this is visible without a click.
+        switch p.budgetSeverity {
+        case 2: attrs[.foregroundColor] = NSColor.systemRed
+        case 1: attrs[.foregroundColor] = NSColor.systemOrange
+        default: break
+        }
         let title = rankFlash.map { " \(p.title)  \($0)" } ?? " " + p.title
-        statusItem.button?.attributedTitle = NSAttributedString(
-            string: title, attributes: [.font: monoFont])
+        statusItem.button?.attributedTitle = NSAttributedString(string: title, attributes: attrs)
         statusItem.button?.toolTip = p.tooltip
         rebuildMenu()
         DropdownPanel.shared.update(panelData)
@@ -1456,6 +1500,7 @@ func collect() -> (config: Config, local: LocalStats, server: ServerStats?) {
     var local = LocalStats()
     let today = CLI.report(["--today"])
     let week = CLI.report(["--week"])
+    let month = CLI.report(["--month"])
     if today == nil && week == nil {
         local.failed = true
     } else {
@@ -1465,6 +1510,7 @@ func collect() -> (config: Config, local: LocalStats, server: ServerStats?) {
             local.todayModels = today.models
         }
         if let week { local.weekTokens = week.tokens; local.weekCost = week.cost }
+        if let month { local.monthTokens = month.tokens; local.monthCost = month.cost }
         local.updatedAt = Date()
     }
 

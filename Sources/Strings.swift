@@ -193,6 +193,9 @@ enum L10n {
         "tooltip.rankAllTime": ("All-time board: #%1$d of %2$d", "累计榜 第 %1$d / %2$d 名"),
         "tooltip.rankToday": ("Today's board: #%1$d of %2$d", "今日榜 第 %1$d / %2$d 名"),
         "tooltip.rankTodayNone": ("Today's board: unranked", "今日榜 未上榜"),
+        "tooltip.month": ("This month  %@", "本月  %@"),
+        "tooltip.projected": ("Projected  ~%@", "预计  ~%@"),
+        "tooltip.overBudget": ("⚠ over today's %@ budget", "⚠ 超出今日预算 %@"),
     ]
 }
 
