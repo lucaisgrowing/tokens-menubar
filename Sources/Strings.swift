@@ -59,6 +59,15 @@ enum L10n {
         "gap.unranked": ("%@ · unranked — nothing submitted today",
                          "%@ 未上榜 —— 今天还没有提交记录"),
 
+        // Rank-move banners. Playful on the way up, encouraging on the way down.
+        "move.up": ("🚀 Up to %1$@  ·  +%2$d", "🚀 冲上 %1$@ · 一口气 +%2$d"),
+        "move.passed": ("🎉 Passed @%1$@ — now %2$@ (+%3$d)",
+                        "🎉 反超 @%1$@，冲上 %2$@（+%3$d）"),
+        "move.down": ("Slipped to %1$@ (−%2$d) — claw it back 💪",
+                      "被挤到 %1$@（−%2$d），追回来 💪"),
+        "move.firstAll": ("👑 You're #1 all-time!", "👑 总榜第 1 名，封神！"),
+        "move.firstToday": ("👑 #1 today — top of the board!", "👑 今日榜第 1 名，屠榜了！"),
+
         "marker.menuBar": ("· menu bar", "· 菜单栏"),
         "stamp.local": ("local %@", "本地 %@"),
         "stamp.server": ("server %@", "服务端 %@"),

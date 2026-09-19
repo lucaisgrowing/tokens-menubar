@@ -217,6 +217,25 @@ struct ServerStats {
     }
 }
 
+/// A remembered leaderboard position, so a later refresh can tell you have moved
+/// and say so. `todayKey` is the GMT day the daily board counted, so a snapshot
+/// from yesterday is never compared against today's fresh board after the reset.
+struct RankSnapshot {
+    var allTime: Int          // 0 = unranked
+    var today: Int
+    var todayKey: String
+    var aboveAllTime: String? // who sat directly above, to spot an overtake
+    var aboveToday: String?
+
+    init(_ s: ServerStats) {
+        allTime = s.allTime?.rank ?? 0
+        today = s.today?.rank ?? 0
+        todayKey = dayFormatter.string(from: Date())
+        aboveAllTime = s.allTime?.above?.username
+        aboveToday = s.today?.above?.username
+    }
+}
+
 struct LocalStats {
     var todayTokens = 0
     var todayCost = 0.0
@@ -776,6 +795,11 @@ final class Controller: NSObject, NSMenuDelegate {
     /// menu item cannot start a second install over the top of the first.
     private var installing = false
     private var lastServerFetch: Date?
+    /// Last leaderboard position seen, to announce climbs and slips.
+    private var lastRank: RankSnapshot?
+    /// A short-lived celebratory chip on the menu-bar readout after a rank move.
+    private var rankFlash: String?
+    private var flashToken = 0
     private var apiTimer: Timer?
     private var localTimer: Timer?
     private var updateTimer: Timer?
@@ -832,8 +856,10 @@ final class Controller: NSObject, NSMenuDelegate {
         api.fetch { [weak self] stats in
             guard let self else { return }
             self.lastServerFetch = Date()
-            if let stats { self.server = stats; self.serverFailed = false }
-            else { self.serverFailed = true }
+            if let stats {
+                self.server = stats; self.serverFailed = false
+                self.announceRankMove(stats)
+            } else { self.serverFailed = true }
             self.render()
             if let models = self.server?.models {
                 ChartPopover.shared.update(scope: .lifetime, data: models.map(Self.datum))
@@ -845,6 +871,67 @@ final class Controller: NSObject, NSMenuDelegate {
             if let st = self.server, let from = st.contribStart, let to = st.contribEnd {
                 ContribPopover.shared.update(days: st.contribs, start: from, end: to)
             }
+        }
+    }
+
+    /// Compares the fresh standing on the board being shown against the last one
+    /// and, when it has moved, pops a playful banner — a climb celebrates, a slip
+    /// nudges. The first fetch only records the position; it never fires, so a
+    /// launch is quiet, and a new GMT day is not read as a fall to unranked.
+    private func announceRankMove(_ stats: ServerStats) {
+        let now = RankSnapshot(stats)
+        defer { lastRank = now }
+        guard let was = lastRank else { return }
+
+        let mode = rankMode
+        let prevRank: Int, curRank: Int, prevAbove: String?
+        switch mode {
+        case .today:
+            // The daily board resets at the GMT day boundary; a cross-day compare
+            // would read the reset as a huge drop, so skip it.
+            guard was.todayKey == now.todayKey else { return }
+            (prevRank, curRank, prevAbove) = (was.today, now.today, was.aboveToday)
+        case .allTime:
+            (prevRank, curRank, prevAbove) = (was.allTime, now.allTime, was.aboveAllTime)
+        }
+        guard prevRank > 0, curRank > 0, curRank != prevRank else { return }
+
+        let badge = "\(mode.badge)\(curRank)"
+        if curRank < prevRank {
+            let up = prevRank - curRank
+            if curRank == 1 {
+                note(t(mode == .today ? "move.firstToday" : "move.firstAll"), kind: .success)
+                flashMenuBar("👑")
+            } else if let passed = prevAbove,
+                      stats.standing(mode)?.above?.username != prevAbove {
+                // Climbed past the exact person who had been ahead — the best kind.
+                note(t("move.passed", passed, badge, up), kind: .success)
+                flashMenuBar("🎉+\(up)")
+            } else {
+                note(t("move.up", badge, up), kind: .success)
+                flashMenuBar("🚀+\(up)")
+            }
+        } else {
+            note(t("move.down", badge, curRank - prevRank), kind: .info)
+            flashMenuBar("▽\(curRank - prevRank)")
+        }
+        // A background move must not steal focus by throwing the panel open; the
+        // menu-bar chip carries it at a glance, the banner waits inside the panel.
+        clearTransient(after: 15)
+    }
+
+    /// Briefly tacks a celebratory chip onto the menu-bar readout — the lively,
+    /// non-intrusive half of a rank move. Cleared after a few seconds; a newer
+    /// flash supersedes an older one so a stale chip never lingers.
+    private func flashMenuBar(_ chip: String) {
+        rankFlash = chip
+        flashToken += 1
+        let token = flashToken
+        render()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            guard let self, self.flashToken == token else { return }
+            self.rankFlash = nil
+            self.render()
         }
     }
 
@@ -945,8 +1032,9 @@ final class Controller: NSObject, NSMenuDelegate {
 
     private func render() {
         let p = presenter
+        let title = rankFlash.map { " \(p.title)  \($0)" } ?? " " + p.title
         statusItem.button?.attributedTitle = NSAttributedString(
-            string: " " + p.title, attributes: [.font: monoFont])
+            string: title, attributes: [.font: monoFont])
         statusItem.button?.toolTip = p.tooltip
         rebuildMenu()
         DropdownPanel.shared.update(panelData)
