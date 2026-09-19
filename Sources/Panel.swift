@@ -1030,6 +1030,66 @@ final class PanelContainer: NSView {
     func hitMap() -> [(NSRect, PanelAction)] {
         page == .main ? main.hitMap() : actions.hitMap()
     }
+
+    private var noticeOverlay: NSView?
+    private var noticeHide: DispatchWorkItem?
+
+    /// A frosted notice pinned to the top of the panel, over whatever page is
+    /// showing, that fades out on its own after a few seconds. It sits inside the
+    /// panel — not a window of its own — and may cover a little content while up.
+    func flashNotice(_ message: String, kind: PanelNotice) {
+        noticeHide?.cancel()
+        noticeOverlay?.removeFromSuperview()
+
+        let tint: NSColor = kind == .failure ? .systemRed
+            : kind == .success ? .systemGreen : .controlAccentColor
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let ink = isDark ? tint : (tint.blended(withFraction: 0.4, of: .black) ?? tint)
+        let font = NSFont.systemFont(ofSize: 12.5, weight: .semibold)
+        let hPad: CGFloat = 14, vPad: CGFloat = 10, margin: CGFloat = 10
+        let textMax = bounds.width - margin * 2 - hPad * 2
+        let b = (message as NSString).boundingRect(
+            with: NSSize(width: textMax, height: 400),
+            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font])
+        let w = min(ceil(b.width), textMax) + hPad * 2
+        let h = max(30, ceil(b.height) + vPad * 2)
+
+        let blur = NSVisualEffectView(frame: NSRect(x: (bounds.width - w) / 2, y: 8, width: w, height: h))
+        blur.material = .popover
+        blur.blendingMode = .withinWindow
+        blur.state = .active
+        blur.wantsLayer = true
+        blur.layer?.cornerRadius = 10
+        blur.layer?.masksToBounds = true
+        blur.layer?.borderWidth = 1
+        blur.layer?.borderColor = tint.withAlphaComponent(0.5).cgColor
+
+        let label = NSTextField(labelWithString: message)
+        label.font = font
+        label.textColor = ink
+        label.alignment = .center
+        label.maximumNumberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.frame = NSRect(x: hPad, y: vPad, width: w - hPad * 2, height: h - vPad * 2)
+        label.autoresizingMask = [.width, .height]
+        blur.addSubview(label)
+
+        addSubview(blur, positioned: .above, relativeTo: nil)
+        noticeOverlay = blur
+        blur.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.16; blur.animator().alphaValue = 1 }
+
+        let work = DispatchWorkItem { [weak self, weak blur] in
+            guard let blur else { return }
+            NSAnimationContext.runAnimationGroup({ $0.duration = 0.3; blur.animator().alphaValue = 0 },
+                completionHandler: {
+                    blur.removeFromSuperview()
+                    if self?.noticeOverlay === blur { self?.noticeOverlay = nil }
+                })
+        }
+        noticeHide = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
+    }
 }
 
 /// Hosts the panel in a popover anchored to the status item, so the dropdown
@@ -1079,6 +1139,13 @@ final class DropdownPanel: NSObject {
     func turn(to page: PanelPage) {
         view.page = page
         apply(current)
+    }
+
+    /// A transient notice inside the panel, if it is open. No-op when closed —
+    /// the caller shows the menu-bar chip instead for that case.
+    func flashNotice(_ message: String, kind: PanelNotice) {
+        guard popover.isShown else { return }
+        view.flashNotice(message, kind: kind)
     }
 
     private func apply(_ data: PanelData) {
