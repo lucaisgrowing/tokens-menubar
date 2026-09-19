@@ -6,3 +6,6 @@ build/
 
 # macOS
 .DS_Store
+
+# Machine-specific local scripts, never published
+*.local.sh
