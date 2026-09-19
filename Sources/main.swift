@@ -319,9 +319,8 @@ enum CLI {
     /// Runs the CLI and returns its output and exit code. stderr is captured on
     /// a separate queue so a chatty CLI cannot deadlock the pipe.
     ///
-    /// Note the flag order the CLI wants: global options such as `--no-spinner`
-    /// and `--json` are rejected after a subcommand, so they go before it —
-    /// `tokens --no-spinner submit`, not `tokens submit --no-spinner`.
+    /// Options go after the subcommand: `tokens submit --dry-run --today`. The
+    /// old global `--no-spinner` / `--json` flags are gone in the 27.x line.
     static func run(_ args: [String], timeout: TimeInterval = 120)
         -> (out: Data, err: Data, status: Int32)? {
         guard let bin = binary() else { return nil }
@@ -366,26 +365,33 @@ enum CLI {
             .first { !$0.isEmpty }
     }
 
-    /// `tokens --json` totals: the site counts input+output+cacheRead+cacheWrite+reasoning.
-    /// reasoning has no top-level total, so it is summed from the entries. The
-    /// entries also carry the per-model split used by the chart.
-    static func report(_ extraArgs: [String]) -> (tokens: Int, cost: Double, models: [ModelSlice])? {
-        guard let r = run(["--json", "--no-spinner"] + extraArgs), r.status == 0,
-              let o = try? JSONSerialization.jsonObject(with: r.out) as? [String: Any]
+    /// Today/week totals. The CLI dropped its `--json` report in the 27.x line,
+    /// so this reads them off `submit --dry-run <scope>`, which prints what it
+    /// would send without sending it:
+    ///
+    ///     Total tokens: 6,941,007
+    ///     Total cost: $6.55
+    ///
+    /// The per-model split is no longer in that output — the donut's today slices
+    /// come from the server's contributions instead (`ServerStats.todayModels`),
+    /// so this returns no models and the chart falls back to the server.
+    static func report(_ scopeArgs: [String]) -> (tokens: Int, cost: Double, models: [ModelSlice])? {
+        guard let r = run(["submit", "--dry-run"] + scopeArgs), r.status == 0,
+              let text = String(data: r.out, encoding: .utf8)
         else { return nil }
-        let entries = o["entries"] as? [[String: Any]] ?? []
-        let reasoning = entries.reduce(0) { $0 + int($1, "reasoning") }
-        let total = int(o, "totalInput") + int(o, "totalOutput")
-            + int(o, "totalCacheRead") + int(o, "totalCacheWrite") + reasoning
-        // Entries are grouped by client+model, so the same model can appear more
-        // than once; the chart merges duplicate labels itself.
-        let models = entries.map { e in
-            ModelSlice(model: e["model"] as? String ?? "?",
-                       tokens: int(e, "input") + int(e, "output") + int(e, "cacheRead")
-                           + int(e, "cacheWrite") + int(e, "reasoning"),
-                       cost: dbl(e, "cost"))
+        var tokens: Int?
+        var cost = 0.0
+        for line in text.split(whereSeparator: \.isNewline)
+            .map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            if line.hasPrefix("Total tokens:") {
+                // Grouped with commas, e.g. "6,941,007" — keep only the digits.
+                tokens = Int(line.filter(\.isNumber))
+            } else if line.hasPrefix("Total cost:") {
+                cost = Double(line.drop { $0 != "$" }.dropFirst()
+                    .filter { $0.isNumber || $0 == "." }) ?? 0
+            }
         }
-        return (total, dbl(o, "totalCost"), models)
+        return tokens.map { ($0, cost, []) }
     }
 }
 
@@ -1235,9 +1241,9 @@ final class Controller: NSObject, NSMenuDelegate {
         note(t("action.submitting"), kind: .info)
         render()
         workQueue.async { [weak self] in
-            // Global flags must precede the subcommand; `submit --no-spinner`
-            // is rejected by the CLI outright.
-            let result = CLI.run(["--no-spinner", "submit"], timeout: 300)
+            // The CLI has no spinner flag any more — plain `submit` is all it
+            // wants, and it does not print a spinner to a non-tty like this.
+            let result = CLI.run(["submit"], timeout: 300)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.busy = false
@@ -1650,7 +1656,7 @@ if CommandLine.arguments.contains("--self-update") { runSelfUpdate() }
 /// failure can be reproduced from a terminal. Add `--dry-run` to send nothing.
 if CommandLine.arguments.contains("--submit") {
     let dry = CommandLine.arguments.contains("--dry-run")
-    let args = ["--no-spinner", "submit"] + (dry ? ["--dry-run"] : [])
+    let args = ["submit"] + (dry ? ["--dry-run"] : [])
     print("running: tokens " + args.joined(separator: " "))
     guard let r = CLI.run(args, timeout: 300) else {
         print("tokens CLI not found in \(CLI.candidates.joined(separator: ", "))")
