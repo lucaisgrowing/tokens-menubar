@@ -46,6 +46,9 @@ enum L10n {
         "row.todayLocal": ("↑ all devices · this Mac, live: %1$@  %2$@",
                            "↑ 全部设备累计 · 本机实时 %1$@  %2$@"),
         "row.week": ("This week", "本周"),
+        "row.month": ("This month", "本月"),
+        "month.projected": ("↳ ~%@ projected at today's pace", "↳ 按当前节奏预计 ~%@"),
+        "budget.over": ("⚠ today %1$@ · over the %2$@ budget", "⚠ 今日 %1$@ · 超出预算 %2$@"),
 
         "state.notLoggedIn": ("Not signed in", "未登录"),
         "state.serverFailed": ("Lifetime   server read failed (proxy? tokens.ci unreachable?)",

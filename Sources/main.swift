@@ -784,6 +784,17 @@ struct Presenter {
             }
             out.append(.row(t("row.week"), fmtTokens(local.weekTokens),
                             fmtMoney(local.weekCost), nil))
+            if local.monthCost > 0 {
+                out.append(.row(t("row.month"), fmtTokens(local.monthTokens),
+                                fmtMoney(local.monthCost), nil))
+                if let p = monthProjection {
+                    out.append(.small(t("month.projected", fmtMoney(p))))
+                }
+            }
+            if budgetSeverity > 0 {
+                out.append(.note(t("budget.over", fmtMoney(todayCost),
+                                   fmtMoney(config.dailyCostBudget))))
+            }
         }
         if let s = server, !s.contribs.isEmpty {
             let active = s.contribs.filter { $0.tokens > 0 }.count
