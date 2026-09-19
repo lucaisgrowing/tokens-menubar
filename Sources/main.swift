@@ -1273,6 +1273,11 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(actionItem(t("action.openProfile"), symbol: "person.crop.circle",
                                 action: #selector(openProfile), key: "o"))
 
+        let card = actionItem(t("action.shareCard"), symbol: "square.and.arrow.up",
+                              action: #selector(copyShareCard))
+        card.isEnabled = server != nil
+        menu.addItem(card)
+
         let updateWaiting = update?.isNewer == true
         let updates = actionItem(updateItemTitle(),
                                  symbol: updateWaiting ? "arrow.down.circle.fill" : "arrow.down.circle",
@@ -1493,6 +1498,24 @@ final class Controller: NSObject, NSMenuDelegate {
         let path = name.isEmpty ? "/leaderboard" : "/u/\(name)"
         guard let url = URL(string: config.apiBase + path) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    /// Renders the flex card and drops it on the clipboard, ready to paste into a
+    /// chat — matching the menu bar's appearance so a dark-mode user gets a dark
+    /// card. A banner confirms it, since a clipboard write is otherwise silent.
+    @objc private func copyShareCard() {
+        let dark = statusItem.button?.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        guard let png = ShareCardView.render(config: config, server: server, local: local, dark: dark),
+              let image = NSImage(data: png) else {
+            note(t("card.failed"), kind: .failure)
+            render(); clearTransient(after: 8)
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+        note(t("card.copied"), kind: .success)
+        render(); clearTransient(after: 8)
     }
 
     @objc private func openSupport() {
@@ -1774,6 +1797,19 @@ func runSelfUpdate() -> Never {
 
 /// Renders the contributions grid offscreen. `dark` for dark mode, `hover
 /// YYYY-MM-DD` to force a day's readout.
+func runSharePNG(path: String) -> Never {
+    let (config, local, server) = collect()
+    applyLanguage(config)
+    let dark = !CommandLine.arguments.contains("light")
+    guard let png = ShareCardView.render(config: config, server: server, local: local, dark: dark) else {
+        print("render failed")
+        exit(1)
+    }
+    try? png.write(to: URL(fileURLWithPath: path))
+    print("wrote \(path)")
+    exit(0)
+}
+
 func runContribPNG(path: String) -> Never {
     let (config, _, server) = collect()
     applyLanguage(config)
@@ -1829,6 +1865,10 @@ if let i = CommandLine.arguments.firstIndex(of: "--contrib-png"),
 if let i = CommandLine.arguments.firstIndex(of: "--panel-png"),
    CommandLine.arguments.count > i + 1 {
     runPanelPNG(path: CommandLine.arguments[i + 1])
+}
+if let i = CommandLine.arguments.firstIndex(of: "--share-png"),
+   CommandLine.arguments.count > i + 1 {
+    runSharePNG(path: CommandLine.arguments[i + 1])
 }
 if let i = CommandLine.arguments.firstIndex(of: "--panel-probe") {
     runPanelProbe(path: CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : nil)

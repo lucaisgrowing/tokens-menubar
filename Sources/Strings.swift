@@ -83,6 +83,7 @@ enum L10n {
         "action.refresh": ("Refresh", "刷新"),
         "action.rankMode": ("Rank Shown in Menu Bar", "菜单栏显示排名"),
         "action.openProfile": ("Open tokens.ci Profile", "打开 tokens.ci 主页"),
+        "action.shareCard": ("Copy Stats Card", "复制战绩卡"),
         "action.launchAtLogin": ("Launch at Login", "开机启动"),
         "action.checkUpdates": ("Check for Updates…", "检查更新"),
         "action.support": ("Buy Me a Coffee…", "请我喝杯咖啡…"),
@@ -196,6 +197,9 @@ enum L10n {
         "tooltip.month": ("This month  %@", "本月  %@"),
         "tooltip.projected": ("Projected  ~%@", "预计  ~%@"),
         "tooltip.overBudget": ("⚠ over today's %@ budget", "⚠ 超出今日预算 %@"),
+
+        "card.copied": ("📋 Stats card copied — paste to share", "📋 战绩卡已复制，粘贴即可分享"),
+        "card.failed": ("Could not render the stats card", "战绩卡生成失败"),
     ]
 }
 
