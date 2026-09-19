@@ -1179,6 +1179,12 @@ final class Controller: NSObject, NSMenuDelegate {
             openSupport()
         case .quit:
             quit()
+        case .cardMarkdown:
+            copyEmbedMarkdown()
+        case .cardURL:
+            copyEmbedURL()
+        case .cardImage:
+            copyCardImage()
         }
     }
 

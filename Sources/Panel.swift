@@ -23,6 +23,10 @@ enum PanelAction: Equatable {
     case updates
     case support
     case quit
+    /// Stats-card copies: the live embed markdown/URL, or a local PNG image.
+    case cardMarkdown
+    case cardURL
+    case cardImage
 }
 
 extension PanelAction: CustomStringConvertible {
@@ -41,6 +45,9 @@ extension PanelAction: CustomStringConvertible {
         case .updates: return "updates"
         case .support: return "support"
         case .quit: return "quit"
+        case .cardMarkdown: return "card-markdown"
+        case .cardURL: return "card-url"
+        case .cardImage: return "card-image"
         }
     }
 }
@@ -70,6 +77,8 @@ struct PanelData {
     var monthProjection = 0.0
     /// The configured daily-spend budget in USD; 0 when off.
     var dailyBudget = 0.0
+    /// Lifetime days with usage, as the server counts them.
+    var activeDays = 0
     /// The board the menu bar shows, and the other one.
     var primaryMode: RankMode = .today
     var primary: BoardStanding?
@@ -135,6 +144,7 @@ extension PanelData {
         monthCost = local.monthCost
         monthProjection = projectMonthEnd(local.monthCost)
         dailyBudget = config.dailyCostBudget
+        activeDays = server?.activeDays ?? 0
 
         let all = server?.contribs ?? []
         recent = PanelData.trailing(all, days: 7)
@@ -212,6 +222,7 @@ private struct PanelLayout {
     var monthValue = NSRect.zero
     var monthProj = NSRect.zero
     var budgetLine = NSRect.zero
+    var activeLine = NSRect.zero
     /// What the pointer is over does, or how to use the panel when it is over
     /// nothing.
     var hint = NSRect.zero
@@ -420,14 +431,20 @@ final class PanelView: NSView {
             y += 13
         }
 
-        // This month, a caption/value row like the week's, with the projection and
-        // an over-budget line under it when they apply.
-        if data.monthCost > 0 {
-            l.monthCaption = NSRect(x: pad, y: y, width: inner - 150, height: 13)
-            l.monthValue = NSRect(x: w - pad - 150, y: y - 1, width: 150, height: 15)
-            y += 20
-            if data.monthProjection > 0 {
-                l.monthProj = NSRect(x: pad, y: y, width: inner, height: 13)
+        // This month, a caption/value row like the week's, with the projection,
+        // active-days and an over-budget line under it when they apply.
+        if data.monthCost > 0 || data.activeDays > 0 {
+            if data.monthCost > 0 {
+                l.monthCaption = NSRect(x: pad, y: y, width: inner - 150, height: 13)
+                l.monthValue = NSRect(x: w - pad - 150, y: y - 1, width: 150, height: 15)
+                y += 20
+                if data.monthProjection > 0 {
+                    l.monthProj = NSRect(x: pad, y: y, width: inner, height: 13)
+                    y += 16
+                }
+            }
+            if data.activeDays > 0 {
+                l.activeLine = NSRect(x: pad, y: y, width: inner, height: 13)
                 y += 16
             }
             if data.budgetSeverity > 0 {
@@ -586,7 +603,7 @@ final class PanelView: NSView {
         drawAverage(l, accent: accent)
         drawCards(l)
         if hasWeekBars { drawWeek(l, accent: accent) }
-        if data.monthCost > 0 { drawMonth(l, accent: accent) }
+        if data.monthCost > 0 || data.activeDays > 0 { drawMonth(l, accent: accent) }
         if !l.modelRows.isEmpty { drawModels(l) }
         drawFooter(l, accent: accent)
     }
@@ -746,15 +763,23 @@ final class PanelView: NSView {
     /// month-end projection under it and an over-budget line when the day's spend
     /// has crossed the configured budget — amber past it, red at 1.5×.
     private func drawMonth(_ l: PanelLayout, accent: NSColor) {
-        text(caption(t("row.month")), in: l.monthCaption, font: captionFont,
-             colour: .secondaryLabelColor)
-        let value = "\(fmtTokens(data.monthTokens))  ·  \(fmtMoney(data.monthCost))"
-        text(value, in: l.monthValue,
-             font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
-             colour: .secondaryLabelColor, align: .right)
+        if l.monthCaption != .zero {
+            text(caption(t("row.month")), in: l.monthCaption, font: captionFont,
+                 colour: .secondaryLabelColor)
+        }
+        if l.monthValue != .zero {
+            let value = "\(fmtTokens(data.monthTokens))  ·  \(fmtMoney(data.monthCost))"
+            text(value, in: l.monthValue,
+                 font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+                 colour: .secondaryLabelColor, align: .right)
+        }
         if l.monthProj != .zero {
             text(t("month.projected", fmtMoney(data.monthProjection)),
                  in: l.monthProj, font: smallFont, colour: .secondaryLabelColor)
+        }
+        if l.activeLine != .zero {
+            text(t("panel.activeDays", data.activeDays),
+                 in: l.activeLine, font: smallFont, colour: .secondaryLabelColor)
         }
         if l.budgetLine != .zero {
             text(t("budget.over", fmtMoney(data.todayCost), fmtMoney(data.dailyBudget)),

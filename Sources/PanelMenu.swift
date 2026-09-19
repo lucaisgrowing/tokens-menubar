@@ -103,6 +103,14 @@ final class PanelMenuView: NSView {
         out.append(MenuRow())
         out.append(MenuRow(symbol: "person.crop.circle", title: t("action.openProfile"),
                            kind: .action(.profile), hint: t("hint.profile")))
+        out.append(MenuRow(symbol: "square.and.arrow.up", title: t("action.shareCard"),
+                           kind: .pills([
+                               (label: t("card.pill.md"), action: .cardMarkdown, on: false),
+                               (label: t("card.pill.url"), action: .cardURL, on: false),
+                               (label: t("card.pill.img"), action: .cardImage, on: false),
+                           ]),
+                           hint: t("hint.card"),
+                           enabled: !data.username.isEmpty))
         out.append(MenuRow(
             symbol: data.updateWaiting ? "arrow.down.circle.fill" : "arrow.down.circle",
             title: data.updateTitle.isEmpty ? t("action.checkUpdates") : data.updateTitle,
