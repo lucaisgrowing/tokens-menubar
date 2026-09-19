@@ -902,7 +902,6 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         menu.delegate = self
         DropdownPanel.shared.onAction = { [weak self] action in self?.handle(action) }
-        Notifier.requestAuthorization()
         render()
 
         refreshLocal()
@@ -993,10 +992,10 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         note(message, kind: kind)
         flashMenuBar(chip)
-        // The banner only shows once the panel is open and the chip fades in a few
-        // seconds — a real notification is what actually reaches someone who is not
-        // looking at the menu bar.
-        Notifier.post(title: message, body: t("notify.body", "@" + config.username))
+        // The panel banner only shows once the panel is open, so a floating toast
+        // under the menu-bar icon carries the move to someone who is not looking —
+        // it fades on its own, no system notification and no permission to grant.
+        Toast.shared.show(message, kind: kind, near: statusItem.button)
         clearTransient(after: 15)
     }
 
@@ -1548,16 +1547,16 @@ final class Controller: NSObject, NSMenuDelegate {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
         note(notice, kind: .success)
-        render(); showCopyFeedback(); clearTransient(after: 8)
+        render(); showCopyFeedback(notice); clearTransient(after: 8)
     }
 
     /// The card copies live on the panel's actions page, whose footer does not
     /// carry the banner — so a copy there would look like nothing happened. Turn
-    /// back to the main page where the banner shows, and flash the menu bar too so
-    /// the confirmation lands whether the panel is open or not.
-    private func showCopyFeedback() {
+    /// back to the main page where the banner shows, and float the same toast a
+    /// rank move uses so the confirmation lands whether the panel is open or not.
+    private func showCopyFeedback(_ message: String, kind: PanelNotice = .success) {
         if DropdownPanel.shared.isShown { DropdownPanel.shared.turn(to: .main) }
-        flashMenuBar("📋")
+        Toast.shared.show(message, kind: kind, near: statusItem.button)
     }
 
     /// The official live-card embed, as the README snippet the site's dialog copies.
@@ -1579,13 +1578,13 @@ final class Controller: NSObject, NSMenuDelegate {
         guard let png = ShareCardView.render(config: config, server: server, dark: menuBarIsDark),
               let image = NSImage(data: png) else {
             note(t("card.failed"), kind: .failure)
-            render(); showCopyFeedback(); clearTransient(after: 8)
+            render(); showCopyFeedback(t("card.failed"), kind: .failure); clearTransient(after: 8)
             return
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([image])
         note(t("card.copiedImage"), kind: .success)
-        render(); showCopyFeedback(); clearTransient(after: 8)
+        render(); showCopyFeedback(t("card.copiedImage")); clearTransient(after: 8)
     }
 
     @objc private func openSupport() {
