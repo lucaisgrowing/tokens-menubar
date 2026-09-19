@@ -1,119 +1,126 @@
-// A shareable "flex card" — a standalone image of your standing, rendered with
-// the same offscreen trick the popover snapshots use. Copied to the clipboard
-// from the menu, or written to a file with `--share-png`.
+// A shareable stats card, drawn to match tokens.ci's own `</> embed` card so the
+// image pasted into a chat and the live card in a README look like siblings.
 //
-// The card is deliberately not the panel: it is a fixed-size, solid-surface
-// graphic that reads well pasted into a chat, so it uses its own layout and a
-// fixed accent (not the system one) so everyone's card looks the same.
+// The menu offers both: the official embed (markdown / image URL, a live SVG the
+// site renders and keeps current) for a README, and this locally-drawn PNG for
+// pasting straight into a chat. This file draws the PNG; the embed links are
+// plain strings built in the controller.
+//
+// Layout and palette follow the site's 2-D embed (a 680×186 strip: handle and
+// "updated" line up top, a row of Tokens / Cost / Rank / Active-days below),
+// rendered at 2× for a crisp image. Rendered offscreen, the popover's trick.
 
 import AppKit
 
-/// Consecutive days up to today with usage, from the contributions grid. Today
-/// not yet having a submission does not break the streak — it counts from
-/// yesterday in that case, so an unsubmitted morning is not a reset.
-func currentStreak(_ contribs: [ContribDay]) -> Int {
-    let active = Set(contribs.filter { $0.tokens > 0 }.map { dayFormatter.string(from: $0.date) })
-    guard !active.isEmpty else { return 0 }
-    var day = Date()
-    if !active.contains(dayFormatter.string(from: day)) {
-        day = day.addingTimeInterval(-86_400) // start from yesterday
+enum Embed {
+    static let base = "https://tokens.ci"
+
+    /// The live-card image URL, with the view and theme the site's dialog sets.
+    static func imageURL(user: String, dark: Bool, view3D: Bool = false) -> String {
+        let u = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? user
+        return "\(base)/api/embed/\(u)/svg?view=\(view3D ? "3d" : "2d")&theme=\(dark ? "dark" : "light")"
     }
-    var streak = 0
-    while active.contains(dayFormatter.string(from: day)) {
-        streak += 1
-        day = day.addingTimeInterval(-86_400)
+
+    static func profileURL(user: String) -> String {
+        let u = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? user
+        return "\(base)/u/\(u)"
     }
-    return streak
+
+    /// The README snippet the site's dialog copies: the image linked to the profile.
+    static func markdown(user: String, dark: Bool, view3D: Bool = false) -> String {
+        "[![Tokens Stats](\(imageURL(user: user, dark: dark, view3D: view3D)))](\(profileURL(user: user)))"
+    }
 }
 
 final class ShareCardView: NSView {
     var config = Config(username: "")
     var server: ServerStats?
-    var local = LocalStats()
     var dark = true
 
-    override var isFlipped: Bool { true } // top-down layout math
+    override var isFlipped: Bool { true }
 
-    static let size = NSSize(width: 660, height: 380)
-
-    private let accent = NSColor(srgbRed: 0.29, green: 0.62, blue: 0.98, alpha: 1)
+    private static let scale: CGFloat = 2
+    static let size = NSSize(width: 680 * scale, height: 186 * scale)
 
     override func draw(_ dirty: NSRect) {
-        let bg = dark ? NSColor(srgbRed: 0.10, green: 0.10, blue: 0.11, alpha: 1)
-                      : NSColor(srgbRed: 0.97, green: 0.97, blue: 0.98, alpha: 1)
+        let s = Self.scale
+        // Palette lifted from the site's embed so the two cards match.
+        let bg = dark ? hex("141414") : hex("FFFFFF")
+        let primary = dark ? hex("F4F7FB") : hex("18181B")
+        let secondary = hex("A1A1AA")
+        let accent = hex("2F8FFF")
+        let rule = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.10)
+
         bg.setFill()
         bounds.fill()
+        if !dark { stroke(bounds.insetBy(dx: 0.5, dy: 0.5), radius: 0, colour: rule) }
 
-        let primary = dark ? NSColor.white : NSColor(white: 0.10, alpha: 1)
-        let secondary = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.5)
-        let pad: CGFloat = 40
+        let pad: CGFloat = 28 * s
         let w = bounds.width
+        let user = config.username.isEmpty ? "tokens" : "@" + config.username
 
-        // Header: bolt + handle on the left, wordmark on the right.
-        let name = config.username.isEmpty ? "tokens" : "@" + config.username
-        text("⚡ " + name, in: NSRect(x: pad, y: 30, width: w - pad * 2, height: 30),
-             font: .systemFont(ofSize: 22, weight: .semibold), colour: primary)
-        text("tokens.ci", in: NSRect(x: w - pad - 200, y: 36, width: 200, height: 20),
-             font: .systemFont(ofSize: 13, weight: .medium), colour: secondary, align: .right)
+        // Header: handle left, profile path right.
+        text(user, in: NSRect(x: pad, y: 22 * s, width: w * 0.6, height: 26 * s),
+             font: .systemFont(ofSize: 20 * s, weight: .bold), colour: primary)
+        text("tokens.ci/u/\(config.username)",
+             in: NSRect(x: w * 0.4 - pad, y: 26 * s, width: w * 0.6, height: 18 * s),
+             font: .systemFont(ofSize: 12 * s, weight: .medium), colour: secondary, align: .right)
 
-        // Hero: the all-time rank, big, with the field size beside it.
-        let all = server?.allTime
-        text(L10n.current == .zh ? "总榜排名" : "ALL-TIME RANK",
-             in: NSRect(x: pad, y: 96, width: 320, height: 16),
-             font: .systemFont(ofSize: 12, weight: .semibold), colour: secondary)
-        let rankStr = (all?.rank ?? 0) > 0 ? "#\(all!.rank)" : "#—"
-        let heroFont = NSFont.monospacedDigitSystemFont(ofSize: 66, weight: .bold)
-        let heroW = measure(rankStr, font: heroFont).width
-        text(rankStr, in: NSRect(x: pad - 2, y: 112, width: heroW + 8, height: 78),
-             font: heroFont, colour: accent)
-        if let a = all, a.rank > 0 {
-            text("/ \(a.totalUsers)", in: NSRect(x: pad + heroW + 8, y: 150, width: 200, height: 30),
-                 font: .monospacedDigitSystemFont(ofSize: 24, weight: .medium), colour: secondary)
+        // Sub-line: when it was last refreshed and the span the numbers cover.
+        text("Updated \(utcStamp(server?.updatedAt ?? Date())) (UTC)",
+             in: NSRect(x: pad, y: 50 * s, width: w * 0.6, height: 16 * s),
+             font: .systemFont(ofSize: 11 * s, weight: .regular), colour: secondary)
+        if let a = server?.contribStart, let b = server?.contribEnd {
+            text("\(dayStamp(a)) → \(dayStamp(b))",
+                 in: NSRect(x: w * 0.4 - pad, y: 50 * s, width: w * 0.6, height: 16 * s),
+                 font: .systemFont(ofSize: 11 * s, weight: .regular), colour: secondary, align: .right)
         }
 
-        // Today's rank, upper right, as the second headline.
-        if let td = server?.today, td.rank > 0 {
-            let badge = L10n.current == .zh ? "今日 今#\(td.rank)" : "TODAY  D#\(td.rank)"
-            text(badge, in: NSRect(x: w - pad - 260, y: 150, width: 260, height: 28),
-                 font: .monospacedDigitSystemFont(ofSize: 22, weight: .semibold),
-                 colour: primary, align: .right)
-        }
+        fill(NSRect(x: pad, y: 82 * s, width: w - pad * 2, height: 1), radius: 0, colour: rule)
 
-        // A row of stat tiles along the bottom.
-        let tiles: [(String, String)] = [
-            (L10n.current == .zh ? "累计 tokens" : "LIFETIME",
-             fmtTokens(server?.totalTokens ?? 0)),
-            (L10n.current == .zh ? "累计花费" : "SPENT",
-             fmtMoney(server?.totalCost ?? 0)),
-            (L10n.current == .zh ? "连续天数" : "STREAK",
-             "\(currentStreak(server?.contribs ?? []))" + (L10n.current == .zh ? " 天" : "d")),
+        // Stat row: label above, value below, tokens in the accent like the site.
+        let stats: [(String, String, NSColor)] = [
+            ("Tokens", fmtExact(server?.totalTokens ?? 0), accent),
+            ("Cost", fmtMoney(server?.totalCost ?? 0), primary),
+            ("Rank", (server?.allTime?.rank ?? 0) > 0 ? "#\(server!.allTime!.rank)" : "#—", primary),
+            ("Active days", "\(server?.activeDays ?? 0)", primary),
         ]
-        let gap: CGFloat = 16
-        let tileW = (w - pad * 2 - gap * CGFloat(tiles.count - 1)) / CGFloat(tiles.count)
-        let tileY: CGFloat = 236
-        let tileH: CGFloat = 84
-        let card = (dark ? NSColor.white : NSColor.black).withAlphaComponent(dark ? 0.06 : 0.04)
-        for (i, tile) in tiles.enumerated() {
-            let x = pad + (tileW + gap) * CGFloat(i)
-            fill(NSRect(x: x, y: tileY, width: tileW, height: tileH), radius: 14, colour: card)
-            text(tile.0, in: NSRect(x: x + 16, y: tileY + 16, width: tileW - 32, height: 16),
-                 font: .systemFont(ofSize: 11, weight: .semibold), colour: secondary)
-            text(tile.1, in: NSRect(x: x + 16, y: tileY + 38, width: tileW - 32, height: 32),
-                 font: .monospacedDigitSystemFont(ofSize: 24, weight: .semibold), colour: primary)
+        let colW = (w - pad * 2) / CGFloat(stats.count)
+        for (i, stat) in stats.enumerated() {
+            let x = pad + colW * CGFloat(i)
+            text(stat.0, in: NSRect(x: x, y: 110 * s, width: colW - 12 * s, height: 16 * s),
+                 font: .systemFont(ofSize: 11 * s, weight: .semibold), colour: secondary)
+            text(stat.1, in: NSRect(x: x, y: 130 * s, width: colW - 12 * s, height: 30 * s),
+                 font: .monospacedDigitSystemFont(ofSize: 22 * s, weight: .semibold), colour: stat.2)
         }
 
         // Footer wordmark.
-        text(L10n.current == .zh ? "由 TokensBar 生成 · tokens.ci" : "via TokensBar · tokens.ci",
-             in: NSRect(x: pad, y: 344, width: w - pad * 2, height: 16),
-             font: .systemFont(ofSize: 11, weight: .medium), colour: secondary)
+        text("⚡ via TokensBar",
+             in: NSRect(x: pad, y: 164 * s, width: w - pad * 2, height: 14 * s),
+             font: .systemFont(ofSize: 10 * s, weight: .medium), colour: secondary, align: .right)
     }
 
-    /// Renders a card offscreen to PNG data, the same hosting trick the popover
-    /// snapshots use.
-    static func render(config: Config, server: ServerStats?, local: LocalStats,
-                       dark: Bool = true) -> Data? {
+    private func hex(_ h: String) -> NSColor {
+        var v: UInt64 = 0; Scanner(string: h).scanHexInt64(&v)
+        return NSColor(srgbRed: CGFloat((v >> 16) & 0xff) / 255,
+                       green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255, alpha: 1)
+    }
+
+    private func utcStamp(_ d: Date) -> String { Self.stamp(d, "MMM d, yyyy") }
+    private func dayStamp(_ d: Date) -> String { Self.stamp(d, "MMM d, yyyy") }
+    private static func stamp(_ d: Date, _ fmt: String) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = fmt
+        return f.string(from: d)
+    }
+
+    /// Renders a card offscreen to PNG data — the popover's hosting trick.
+    static func render(config: Config, server: ServerStats?, dark: Bool = true) -> Data? {
         let view = ShareCardView(frame: NSRect(origin: .zero, size: size))
-        view.config = config; view.server = server; view.local = local; view.dark = dark
+        view.config = config; view.server = server; view.dark = dark
         let host = NSWindow(contentRect: view.frame, styleMask: [.borderless],
                             backing: .buffered, defer: false)
         host.isReleasedWhenClosed = false

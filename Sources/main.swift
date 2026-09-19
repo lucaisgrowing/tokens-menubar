@@ -1273,9 +1273,15 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(actionItem(t("action.openProfile"), symbol: "person.crop.circle",
                                 action: #selector(openProfile), key: "o"))
 
-        let card = actionItem(t("action.shareCard"), symbol: "square.and.arrow.up",
-                              action: #selector(copyShareCard))
-        card.isEnabled = server != nil
+        let card = NSMenuItem(title: t("action.shareCard"), action: nil, keyEquivalent: "")
+        card.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: nil)
+        card.isEnabled = server != nil && !config.username.isEmpty
+        let sub = NSMenu()
+        let md = NSMenuItem(title: t("card.embedMarkdown"), action: #selector(copyEmbedMarkdown), keyEquivalent: "")
+        let url = NSMenuItem(title: t("card.embedURL"), action: #selector(copyEmbedURL), keyEquivalent: "")
+        let img = NSMenuItem(title: t("card.image"), action: #selector(copyCardImage), keyEquivalent: "")
+        for it in [md, url, img] { it.target = self; sub.addItem(it) }
+        card.submenu = sub
         menu.addItem(card)
 
         let updateWaiting = update?.isNewer == true
@@ -1500,13 +1506,34 @@ final class Controller: NSObject, NSMenuDelegate {
         NSWorkspace.shared.open(url)
     }
 
-    /// Renders the flex card and drops it on the clipboard, ready to paste into a
-    /// chat — matching the menu bar's appearance so a dark-mode user gets a dark
-    /// card. A banner confirms it, since a clipboard write is otherwise silent.
-    @objc private func copyShareCard() {
-        let dark = statusItem.button?.effectiveAppearance
-            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        guard let png = ShareCardView.render(config: config, server: server, local: local, dark: dark),
+    private var menuBarIsDark: Bool {
+        statusItem.button?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    private func copyString(_ s: String, notice: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+        note(notice, kind: .success)
+        render(); clearTransient(after: 8)
+    }
+
+    /// The official live-card embed, as the README snippet the site's dialog copies.
+    @objc private func copyEmbedMarkdown() {
+        guard !config.username.isEmpty else { return }
+        copyString(Embed.markdown(user: config.username, dark: menuBarIsDark), notice: t("card.copiedMarkdown"))
+    }
+
+    /// The live-card image URL on its own, for an HTML <img> or a chat that unfurls it.
+    @objc private func copyEmbedURL() {
+        guard !config.username.isEmpty else { return }
+        copyString(Embed.imageURL(user: config.username, dark: menuBarIsDark), notice: t("card.copiedURL"))
+    }
+
+    /// A locally-drawn PNG of the card straight onto the clipboard, for pasting
+    /// into a chat. Matches the menu bar's light/dark appearance and the site's
+    /// 2-D embed layout. A banner confirms it, since a clipboard write is silent.
+    @objc private func copyCardImage() {
+        guard let png = ShareCardView.render(config: config, server: server, dark: menuBarIsDark),
               let image = NSImage(data: png) else {
             note(t("card.failed"), kind: .failure)
             render(); clearTransient(after: 8)
@@ -1514,7 +1541,7 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([image])
-        note(t("card.copied"), kind: .success)
+        note(t("card.copiedImage"), kind: .success)
         render(); clearTransient(after: 8)
     }
 
@@ -1795,13 +1822,12 @@ func runSelfUpdate() -> Never {
     exit(0)
 }
 
-/// Renders the contributions grid offscreen. `dark` for dark mode, `hover
-/// YYYY-MM-DD` to force a day's readout.
+/// Renders the stats card offscreen. `light` for the light theme.
 func runSharePNG(path: String) -> Never {
-    let (config, local, server) = collect()
+    let (config, _, server) = collect()
     applyLanguage(config)
     let dark = !CommandLine.arguments.contains("light")
-    guard let png = ShareCardView.render(config: config, server: server, local: local, dark: dark) else {
+    guard let png = ShareCardView.render(config: config, server: server, dark: dark) else {
         print("render failed")
         exit(1)
     }

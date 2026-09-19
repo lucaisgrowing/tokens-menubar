@@ -83,7 +83,10 @@ enum L10n {
         "action.refresh": ("Refresh", "刷新"),
         "action.rankMode": ("Rank Shown in Menu Bar", "菜单栏显示排名"),
         "action.openProfile": ("Open tokens.ci Profile", "打开 tokens.ci 主页"),
-        "action.shareCard": ("Copy Stats Card", "复制战绩卡"),
+        "action.shareCard": ("Stats Card", "战绩卡"),
+        "card.embedMarkdown": ("Copy Embed Markdown (README)", "复制 Embed Markdown（README）"),
+        "card.embedURL": ("Copy Embed Image URL", "复制 Embed 图片 URL"),
+        "card.image": ("Copy Card Image", "复制战绩卡图片"),
         "action.launchAtLogin": ("Launch at Login", "开机启动"),
         "action.checkUpdates": ("Check for Updates…", "检查更新"),
         "action.support": ("Buy Me a Coffee…", "请我喝杯咖啡…"),
@@ -198,7 +201,10 @@ enum L10n {
         "tooltip.projected": ("Projected  ~%@", "预计  ~%@"),
         "tooltip.overBudget": ("⚠ over today's %@ budget", "⚠ 超出今日预算 %@"),
 
-        "card.copied": ("📋 Stats card copied — paste to share", "📋 战绩卡已复制，粘贴即可分享"),
+        "card.copiedMarkdown": ("📋 Embed markdown copied — paste into a README",
+                                "📋 Embed markdown 已复制，粘到 README 里"),
+        "card.copiedURL": ("📋 Embed image URL copied", "📋 Embed 图片 URL 已复制"),
+        "card.copiedImage": ("📋 Card image copied — paste to share", "📋 战绩卡图片已复制，粘贴即可分享"),
         "card.failed": ("Could not render the stats card", "战绩卡生成失败"),
     ]
 }
