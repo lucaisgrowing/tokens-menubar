@@ -57,7 +57,8 @@ the result in the footer, beside the last local and server refresh times.
 Right-clicking the icon — or the ⋯ button in the panel — reaches the same set of
 actions. The ⋯ button turns the panel to a second page rather than dropping a
 menu over it: submit, refresh, the rank and language switches as pills, a
-launch-at-login switch, the profile link, the update check, the tip page and
+launch-at-login switch, the profile link, **Copy Stats Card** (a shareable image
+of your standing, straight to the clipboard), the update check, the tip page and
 Quit, with **‹ Actions & Settings** back at the top and the build version at the
 bottom. The two are cleanly split now — left-click the icon for the panel,
 right-click it for the plain NSMenu, and nothing inside the panel reaches back
@@ -110,6 +111,8 @@ The ramp is one hue, light to dark, with separate steps for light and dark mode;
 
 Pick which one the menu bar shows from the "Rank Shown in Menu Bar" row on the panel's actions page, or the rows under the same heading in the right-click menu (the choice is remembered), or set `menuBarRank` in the config file for the default. Both ranks are always shown; the setting only changes the menu bar line and which board the gap bar refers to.
 
+When the board being shown moves between refreshes, a short banner reacts to it — a climb celebrates ("Passed @rival — now D#31", or a crown at #1) with a brief chip on the menu-bar readout (🚀+2 / 🎉 / 👑), a slip nudges. A background move never throws the panel open; the chip carries it at a glance.
+
 ## Requirements
 
 The [`tokens`](https://github.com/missuo/tokens) CLI, installed and logged in:
@@ -153,6 +156,8 @@ Optional, `~/.config/tokens-menubar/config.json`:
   "username": "your-github-username",
   "language": "en",
   "menuBarRank": "all",
+  "menuBarItems": ["tokens", "rank"],
+  "dailyCostBudget": 0,
   "apiRefreshSeconds": 300,
   "localRefreshSeconds": 120,
   "topModels": 5
@@ -165,6 +170,8 @@ Optional, `~/.config/tokens-menubar/config.json`:
 | `apiBase` | `https://tokens.ci` | API base URL |
 | `language` | `en` | UI language: `en` or `zh` |
 | `menuBarRank` | `all` | Which rank the menu bar shows: `all` (lifetime) or `today` |
+| `menuBarItems` | `["tokens", "rank"]` | What the menu-bar line shows, in order — any of `tokens`, `cost`, `rank` |
+| `dailyCostBudget` | `0` | Colour the readout amber past this daily spend (USD), red at 1.5×; `0` is off |
 | `apiRefreshSeconds` | 300 | How often to hit the API (minimum 30) |
 | `localRefreshSeconds` | 120 | How often to run the local scan (minimum 30) |
 | `topModels` | 5 | Models listed in the dropdown, 0 to list none |
@@ -195,6 +202,9 @@ The trust here is HTTPS to GitHub. The download is not code-signature-verified, 
 # Render the contributions grid offscreen.
 ./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png \
     [models|clients|cost] [dark] [hover YYYY-MM-DD]
+
+# Render the shareable stats card offscreen (the "Copy Stats Card" menu item).
+./TokensBar.app/Contents/MacOS/TokensBar --share-png out.png [light]
 
 # Render the dropdown panel offscreen, and print its clickable regions — a still
 # image cannot show where a click lands. `dark` renders dark mode, `menu` the

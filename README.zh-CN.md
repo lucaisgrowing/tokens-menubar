@@ -53,7 +53,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 右键点图标 —— 或者点面板右上角的 ⋯ —— 都能拿到同一组动作。⋯ 不再往面板上盖一层菜单，
 而是把面板翻到第二页：提交、刷新、排名和语言做成一排胶囊按钮、开机启动是个开关，再往下是
-打开主页、检查更新、赞助和退出，顶上是 **‹ 操作与设置**，底下是当前版本号。两套界面现在
+打开主页、**复制战绩卡**（把你战绩渲染成一张图直接进剪贴板）、检查更新、赞助和退出，顶上是 **‹ 操作与设置**，底下是当前版本号。两套界面现在
 彻底分开了：左键点图标出面板，右键点图标出那个纯 NSMenu，面板里没有任何一处再把菜单盖回来。
 菜单的动作和快捷键都没变，只有一层：数字排在最上面，点它们打开的模型分布从菜单栏算起只要
 一次点击；排名和语言的选项改成标题下面的缩进行，不再做成子菜单。
@@ -100,6 +100,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 菜单栏显示哪一个，在面板操作页的「菜单栏显示排名」那一行、或右键菜单里同名标题下面的两行随时切换（选择会记住）；想改默认值就在 config.json 里写 `menuBarRank`。两个排名在面板和菜单里始终都列出来，切换只影响菜单栏那一行、以及差距进度条看的是哪个榜。
 
+两次刷新之间当前显示的榜有变动时，会弹一条小横幅：上升就庆祝（「反超 @对手，冲上 今#31」，第 1 名给顶皇冠），菜单栏读数上还会短暂挂一个小徽章（🚀+2 / 🎉 / 👑）；掉名次则轻推一下。后台变动不会把面板弹开，徽章一眼就能看到。
+
 ## 前提
 
 需要先装好并登录 [`tokens`](https://github.com/missuo/tokens) CLI：
@@ -143,6 +145,8 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
   "username": "your-github-username",
   "language": "en",
   "menuBarRank": "all",
+  "menuBarItems": ["tokens", "rank"],
+  "dailyCostBudget": 0,
   "apiRefreshSeconds": 300,
   "localRefreshSeconds": 120,
   "topModels": 5
@@ -155,6 +159,8 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 | `apiBase` | `https://tokens.ci` | API 地址 |
 | `language` | `en` | 界面语言：`en` 或 `zh` |
 | `menuBarRank` | `all` | 菜单栏默认显示哪个排名：`all` 累计榜 / `today` 当日榜 |
+| `menuBarItems` | `["tokens", "rank"]` | 菜单栏那行显示什么、按什么顺序 —— `tokens`、`cost`、`rank` 任意组合 |
+| `dailyCostBudget` | `0` | 今日花费超过这个值（USD）读数变琥珀、1.5 倍变红；`0` 关闭 |
 | `apiRefreshSeconds` | 300 | 拉服务端数据的间隔（最小 30） |
 | `localRefreshSeconds` | 120 | 跑本地扫描的间隔（最小 30） |
 | `topModels` | 5 | 下拉里列几个模型，0 = 不列 |
@@ -183,6 +189,9 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 # 把贡献图离屏渲染成 PNG
 ./TokensBar.app/Contents/MacOS/TokensBar --contrib-png out.png \
     [models|clients|cost] [dark] [hover YYYY-MM-DD]
+
+# 把可分享的战绩卡离屏渲染成 PNG（对应「复制战绩卡」菜单项）
+./TokensBar.app/Contents/MacOS/TokensBar --share-png out.png [light]
 
 # 把下拉面板离屏渲染成 PNG，同时打印各个可点区域 —— 静态图看不出点哪里会有反应
 # dark = 深色模式，menu = 操作页，hover N = 近 7 天里第 N 天的悬停态（0 是最早那天），
