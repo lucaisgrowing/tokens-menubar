@@ -117,6 +117,8 @@ brew install owo-network/brew/tokens
 tokens login
 ```
 
+> **On Apple silicon, macOS 27 removed Rosetta 2**, so an x86_64 `tokens` — say one left behind by an Intel Homebrew in `/usr/local` — will not launch at all. Install the native arm64 build (the `owo-network/brew/tokens` from an arm64 Homebrew in `/opt/homebrew` is one). TokensBar picks a runnable slice when more than one `tokens` is on the path, and shows the reason in the submit banner if none can run instead of a bare "submit failed".
+
 ## Install
 
 Download `TokensBar.app.zip` from [Releases](https://github.com/lucaisgrowing/tokens-menubar/releases), unzip, move it to `/Applications`, then clear the quarantine flag:

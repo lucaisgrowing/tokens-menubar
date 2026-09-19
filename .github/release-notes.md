@@ -17,5 +17,8 @@ Requires the [`tokens`](https://github.com/missuo/tokens) CLI installed and logg
 
 需要先装好并登录 [`tokens`](https://github.com/missuo/tokens) CLI。universal 二进制（arm64 + x86_64），要求 macOS 13 以上，由 GitHub Actions 构建。
 
+> On Apple silicon, macOS 27 removed Rosetta 2 — the `tokens` CLI must be a native arm64 build, not an x86_64 one from an Intel Homebrew.
+> Apple silicon 上 macOS 27 移除了 Rosetta 2，`tokens` CLI 必须是原生 arm64 版，不能是 Intel Homebrew 里的 x86_64 版。
+
 MIT licensed. Credits to [missuo/tokens](https://github.com/missuo/tokens) and [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale) — TokensBar is only a menu bar front end for their work, and is not affiliated with tokens.ci.
 

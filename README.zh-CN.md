@@ -107,6 +107,8 @@ brew install owo-network/brew/tokens
 tokens login
 ```
 
+> **Apple silicon 上，macOS 27 移除了 Rosetta 2**，所以 x86_64 版的 `tokens`（比如 `/usr/local` 下 Intel Homebrew 留下的那个）根本起不来。请装原生 arm64 版（`/opt/homebrew` 里的 arm64 Homebrew 装 `owo-network/brew/tokens` 就是）。PATH 上有多个 `tokens` 时 TokensBar 会挑能跑的那个；一个都跑不动时会在提交横幅里显示原因，而不是光秃秃一句「提交失败」。
+
 ## 安装
 
 去 [Releases](https://github.com/lucaisgrowing/tokens-menubar/releases) 下 `TokensBar.app.zip`，解压后拖进 `/Applications`，然后去掉隔离标记：
