@@ -223,7 +223,7 @@ final class PanelMenuView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let l = geometry()
         hits = regions(l)
-        let accent = NSColor.controlAccentColor
+        let accent = tokensAccent
         defer {
             if let rect = pressedRect {
                 fill(rect, radius: 7, colour: accent.withAlphaComponent(0.14))
@@ -259,7 +259,7 @@ final class PanelMenuView: NSView {
     private func drawRow(_ row: MenuRow, in rect: NSRect, pills: [NSRect], accent: NSColor) {
         let dim = !row.enabled
         let glyph: NSColor = dim ? .tertiaryLabelColor
-            : (row.accented ? accent : .secondaryLabelColor)
+            : (row.accented ? tokensAccentInk : .secondaryLabelColor)
         icon(row.symbol, in: NSRect(x: rect.minX + 8, y: rect.midY - 9, width: 18, height: 18),
              size: 13, colour: glyph)
 
@@ -270,7 +270,7 @@ final class PanelMenuView: NSView {
         text(row.title,
              in: NSRect(x: x, y: rect.midY - 8, width: max(40, right - 8 - x), height: 16),
              font: rowFont, colour: dim ? .tertiaryLabelColor
-                 : (row.accented ? accent : .labelColor))
+                 : (row.accented ? tokensAccentInk : .labelColor))
 
         switch row.kind {
         case .pills(let choices):
@@ -298,8 +298,7 @@ final class PanelMenuView: NSView {
         }
     }
 
-    /// White or black on the accent fill, whichever the accent can carry — the
-    /// system accent can be a light yellow.
+    /// Foreground for the fixed dark-green accent fill.
     private func onAccent(_ accent: NSColor) -> NSColor {
         guard let rgb = accent.usingColorSpace(.sRGB) else { return .white }
         let luma = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent

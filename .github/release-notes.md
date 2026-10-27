@@ -1,8 +1,10 @@
-## TokensBar 1.11.0
+## TokensBar 1.11.1
 
-Keeps the original UI modules, teal light/dark style and original macOS typography, with refined spacing, cards, chart details and clearer data labels. Adds private-account read-token support through Keychain, differentiated API errors, truthful successful-update times, a 60-second API polling floor and CLI documentation/parser fixes.
+Restores the original deep-green buttons and highlights instead of inheriting the system accent color. Ranking/average and activity bars, selected settings, header icon, informational feedback and share-card emphasis use the app palette in light and dark mode. Small dark-mode accent text is lifted for legibility. Original fonts, layout, functions, semantic status colors and model-category colors are preserved.
 
-保留原有模块、青绿浅深色与原版系统字体，精修留白、卡片和图表；补上钥匙串 read token、错误分类、成功更新时间、60 秒 API 刷新下限，以及 CLI 文档/解析修正。完整记录见 [CHANGELOG.md](https://github.com/lucaisgrowing/tokens-menubar/blob/v1.11.0/CHANGELOG.md)。
+恢复原来的墨绿／深绿色按钮和高亮，不再随 macOS 的系统蓝色等强调色变化；排名／均值与活动条、设置选中项、标题图标、信息提示和战绩卡强调色保持一致。深色模式的小号绿色文字适当提亮以保证可读性，原字体、布局、功能、状态色与模型分类色不变。
+
+[Full changelog / 完整更新日志](https://github.com/lucaisgrowing/tokens-menubar/blob/v1.11.1/CHANGELOG.md)。
 
 ## Build and verification / 构建与验证
 

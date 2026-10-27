@@ -23,17 +23,18 @@
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
-## What's new in 1.11.0
+## What's new in 1.11.1
 
+- Restore the original deep-green buttons and highlights, independent of the macOS system accent color; preserve light/dark styling, with more legible small green text in dark mode.
 - Polish the existing teal interface without replacing its layout: a 360pt panel, cleaner spacing and cards, clearer progress bars, and the original system fonts, sizes and weights.
 - Support private accounts with an optional read token stored in macOS Keychain, sent only to the configured HTTPS profile endpoint.
 - Keep valid data visible when refreshes fail, distinguish successful fetches from refresh attempts, and explain network, authentication, not-found and rate-limit errors. API polling has a 60-second minimum (300 seconds by default).
 - Make all-device vs. local-Mac totals, UTC days and estimated costs explicit; show nonzero model shares below one percent as `<1%`.
 - Add press/drag-out feedback, interruptible charts, reduced-motion support and stronger high-contrast/opaque presentation. Correct the CLI documentation and add 45 pure-Swift regression checks.
 
-[Download v1.11.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.0) · [Full changelog](CHANGELOG.md)
+[Download v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [Full changelog](CHANGELOG.md)
 
-The README images below are native AppKit offscreen renders of the published **1.11.0** app on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
+The README images below are native AppKit offscreen renders of the published **1.11.1** app on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
 
 > **Apple silicon:** use a native **arm64** `tokens` CLI, installed through Apple silicon Homebrew (`brew install owo-network/brew/tokens`). An Intel-only CLI needs Rosetta to run; TokensBar prefers a native installation when available and reports an unlaunchable CLI rather than a bare "submit failed".
 
@@ -167,7 +168,7 @@ For private accounts, create a **read token** in tokens.ci Settings, then choose
 
 ### Offline checks
 
-Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.11.0 macOS release workflow passed those 45 checks, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
+Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.11.1 macOS release workflow passed those 45 checks, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
 
 ## Configuration
 

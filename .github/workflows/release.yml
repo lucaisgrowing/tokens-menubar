@@ -36,6 +36,8 @@ jobs:
           jq -e --arg tag "$RELEASE_TAG" 'all(.[]; .tag_name != $tag)' /tmp/releases.json
       - name: Regression tests
         run: bash Tests/run.sh
+      - name: Native accent and contrast checks
+        run: bash Tests/accent.sh
       - name: Build universal app
         run: ./build.sh --universal
       - name: Verify bundle and tag version

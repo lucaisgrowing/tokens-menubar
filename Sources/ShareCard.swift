@@ -48,7 +48,7 @@ final class ShareCardView: NSView {
         let bg = dark ? hex("141414") : hex("FFFFFF")
         let primary = dark ? hex("F4F7FB") : hex("18181B")
         let secondary = hex("A1A1AA")
-        let accent = hex("2F8FFF")
+        let accent = tokensAccentInk
         let rule = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.10)
 
         bg.setFill()

@@ -41,6 +41,11 @@ for LANG in en zh; do
   "$BIN" --chart-png "$DIR/chart-today-tokens.png" today tokens --lang "$LANG"
   "$BIN" --chart-png "$DIR/chart-lifetime-cost.png" lifetime cost dark --lang "$LANG"
   "$BIN" --contrib-png "$DIR/contributions.png" models --lang "$LANG"
+  mkdir -p "$OUT/states/$LANG"
+  "$BIN" --panel-png "$OUT/states/$LANG/hover-submit.png" hover 100 --lang "$LANG"
+  "$BIN" --panel-png "$OUT/states/$LANG/notice-info-dark.png" dark notice info Sample --lang "$LANG"
+  "$BIN" --panel-probe "$OUT/states/$LANG/panel-probe.png" --lang "$LANG" > "$OUT/states/$LANG/panel-probe.txt"
+  "$BIN" --share-png "$OUT/states/$LANG/share-card.png" --lang "$LANG"
   for PNG in "$DIR"/*.png; do
     [[ -s "$PNG" ]]
     sips -g pixelWidth -g pixelHeight "$PNG"

@@ -621,7 +621,7 @@ final class PanelView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let l = geometry()
         hits = regions(l)
-        let accent = NSColor.controlAccentColor
+        let accent = tokensAccent
 
         if let i = hoveredHit, hits.indices.contains(i) {
             // The submit button and the bars card paint their own surface, so they
@@ -654,7 +654,7 @@ final class PanelView: NSView {
     private func drawHeader(_ l: PanelLayout) {
         let name = data.username.isEmpty ? t("state.notLoggedIn") : "@" + data.username
         icon("bolt.fill", in: NSRect(x: l.title.minX, y: l.title.minY + 1, width: 13, height: 15),
-             size: 11, colour: .controlAccentColor)
+             size: 11, colour: tokensAccentInk)
         let nameRect = NSRect(x: l.title.minX + 18, y: l.title.minY,
                               width: l.title.width - 18, height: l.title.height)
         text(name, in: nameRect, font: titleFont)
@@ -775,7 +775,7 @@ final class PanelView: NSView {
         else { value = t("panel.avgPercent", Int((ratio * 100).rounded())) }
         text(value, in: l.avgValue,
              font: .monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
-             colour: ratio >= 1 ? accent : .secondaryLabelColor, align: .right)
+             colour: ratio >= 1 ? tokensAccentInk : .secondaryLabelColor, align: .right)
         bar(l.avgTrack, progress: CGFloat(min(1, ratio / 2)),
             colour: accent.withAlphaComponent(0.5))
         if avg > 0 {
@@ -938,8 +938,7 @@ final class PanelView: NSView {
         }
     }
 
-    /// White or black on the accent fill, whichever the accent can carry — the
-    /// system accent can be a light yellow.
+    /// Foreground for the fixed dark-green accent fill.
     private func onAccent(_ accent: NSColor) -> NSColor {
         guard let rgb = accent.usingColorSpace(.sRGB) else { return .white }
         let luma = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent
@@ -1176,7 +1175,7 @@ final class PanelContainer: NSView {
         noticeOverlay?.removeFromSuperview()
 
         let tint: NSColor = kind == .failure ? .systemRed
-            : kind == .success ? .systemGreen : .controlAccentColor
+            : kind == .success ? .systemGreen : tokensAccentInk
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let ink = isDark ? tint : (tint.blended(withFraction: 0.4, of: .black) ?? tint)
         let font = NSFont.systemFont(ofSize: 12.5, weight: .semibold)

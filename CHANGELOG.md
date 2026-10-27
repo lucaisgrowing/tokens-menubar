@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.11.1
+
+### Fixed
+- Restore the original deep-green accent from the pre-1.11 screenshots for buttons, selected settings, ranking/average bars, activity bars, header icon, informational feedback and share-card emphasis. App accents no longer follow the system's blue (or other) accent preference.
+- Preserve the original light/dark hues; lift small green text in dark mode for legibility. Keep semantic error/success colors and categorical model colors distinct.
+- Keep the existing typography, layout and functionality unchanged. Bundle version 1.11.1 (build 18).
+- Refresh both READMEs and native macOS screenshots to match this release. Still ad-hoc signed and not notarized; native rendering is not manual interaction/Keychain/live-CLI acceptance testing.
+
 ## 1.11.0
 
 ### Improved

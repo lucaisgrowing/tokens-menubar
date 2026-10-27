@@ -19,10 +19,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Regression tests
         run: bash Tests/run.sh
+      - name: Native accent and contrast checks
+        run: bash Tests/accent.sh
       - name: Build universal app
         run: ./build.sh --universal
       - name: Verify bundle
         run: bash Tools/verify-release.sh
+      - name: Render native candidate views
+        run: bash Tools/render-readme-snapshots.sh "$PWD/TokensBar.app" candidate-snapshots
       - name: Package
         run: |
           ditto -c -k --keepParent TokensBar.app TokensBar.app.zip
@@ -34,4 +38,9 @@ jobs:
           path: |
             TokensBar.app.zip
             SHA256SUMS.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TokensBar-candidate-snapshots
+          path: candidate-snapshots
           if-no-files-found: error

@@ -23,17 +23,18 @@
 
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
-## 1.11.0 更新了什么
+## 1.11.1 更新了什么
 
+- 恢复原来的墨绿／深绿色按钮与高亮，不随 macOS 系统强调色变蓝；浅深色保持一致，深色模式的小号绿色文字适当提亮。
 - 在现有青绿界面上精修，不换布局：360pt 面板、更协调的留白和卡片、更清楚的进度条，保留原版系统字体、字号和字重。
 - 支持私密账号的可选 read token，保存在 macOS 钥匙串中，只发送给配置的 HTTPS 个人数据接口。
 - 刷新失败保留有效旧数据，分清成功获取与刷新尝试，并区分网络、认证、404 和限流错误；API 轮询下限为 60 秒，默认仍为 300 秒。
 - 明确全设备与本机数据、UTC 日期和估算费用；非零但不足 1% 的模型占比显示为 `<1%`。
 - 加入按下与拖出取消反馈、可中断图表转场、减少动态效果和增强对比／不透明适配；修正 CLI 文档，新增 45 项纯 Swift 回归检查。
 
-[下载 v1.11.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.0) · [完整更新日志](CHANGELOG.md)
+[下载 v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [完整更新日志](CHANGELOG.md)
 
-下方图片由已发布的 **1.11.0** App 在 macOS 上通过原生 AppKit 离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
+下方图片由已发布的 **1.11.1** App 在 macOS 上通过原生 AppKit 离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
 
 > **Apple silicon：** 建议用 Apple 芯片版 Homebrew 安装原生 **arm64** `tokens` CLI（`brew install owo-network/brew/tokens`）。仅支持 Intel 的 CLI 需要 Rosetta 才能运行；TokensBar 优先选择可用的原生安装，无法启动时会显示原因，而不是只说「提交失败」。
 
@@ -156,7 +157,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 ### 离线检查
 
-安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.11.0 的 macOS 发布流程已通过这 45 项检查、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
+安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.11.1 的 macOS 发布流程已通过这 45 项检查、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
 
 ## 配置
 
