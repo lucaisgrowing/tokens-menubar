@@ -9,8 +9,6 @@
 
 <h1 align="center">TokensBar</h1>
 
-Release changes: [CHANGELOG.md](CHANGELOG.md).
-
 <p align="center">
   Your <a href="https://tokens.ci">tokens.ci</a> token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
 </p>
@@ -25,7 +23,19 @@ Release changes: [CHANGELOG.md](CHANGELOG.md).
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
-> **macOS 27 · Apple silicon:** Rosetta 2 is gone, so the `tokens` CLI must be a native **arm64** build — `brew install owo-network/brew/tokens` on an Apple silicon Homebrew. A leftover x86_64 `tokens` from an Intel Homebrew won't launch; since 1.9.1 TokensBar skips it and shows the reason instead of a bare "submit failed".
+## What's new in 1.11.0
+
+- Polish the existing teal interface without replacing its layout: a 360pt panel, cleaner spacing and cards, clearer progress bars, and the original system fonts, sizes and weights.
+- Support private accounts with an optional read token stored in macOS Keychain, sent only to the configured HTTPS profile endpoint.
+- Keep valid data visible when refreshes fail, distinguish successful fetches from refresh attempts, and explain network, authentication, not-found and rate-limit errors. API polling has a 60-second minimum (300 seconds by default).
+- Make all-device vs. local-Mac totals, UTC days and estimated costs explicit; show nonzero model shares below one percent as `<1%`.
+- Add press/drag-out feedback, interruptible charts, reduced-motion support and stronger high-contrast/opaque presentation. Correct the CLI documentation and add 45 pure-Swift regression checks.
+
+[Download v1.11.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.0) · [Full changelog](CHANGELOG.md)
+
+The README images below are native AppKit offscreen renders of the published **1.11.0** app on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
+
+> **Apple silicon:** use a native **arm64** `tokens` CLI, installed through Apple silicon Homebrew (`brew install owo-network/brew/tokens`). An Intel-only CLI needs Rosetta to run; TokensBar prefers a native installation when available and reports an unlaunchable CLI rather than a bare "submit failed".
 
 <p align="center">
   <img src="docs/menu.png" width="380" alt="The TokensBar dropdown panel in light mode">
@@ -60,7 +70,7 @@ Right-clicking the icon — or the ⋯ button in the panel — reaches the same 
 actions. The ⋯ button turns the panel to a second page rather than dropping a
 menu over it: submit, refresh, the rank and language switches as pills, a
 launch-at-login switch, the profile link, **Copy Stats Card** (a shareable image
-of your standing, straight to the clipboard), the update check, the tip page and
+of your standing, straight to the clipboard), the private-account read-token dialog, the update check, the tip page and
 Quit, with **‹ Actions & Settings** back at the top and the build version at the
 bottom. The two are cleanly split now — left-click the icon for the panel,
 right-click it for the plain NSMenu, and nothing inside the panel reaches back
@@ -133,7 +143,7 @@ xattr -dr com.apple.quarantine /Applications/TokensBar.app
 open /Applications/TokensBar.app
 ```
 
-The build is ad-hoc signed and **not** notarised, so macOS will refuse to open it until the quarantine attribute is gone. Alternatively, right-click → Open, or allow it in System Settings → Privacy & Security. The release binary is universal (arm64 + x86_64) and needs macOS 13 or newer.
+The build is ad-hoc signed and **not** notarised, so macOS may block it under Gatekeeper. Only allow it if you trust this download. Alternatively, right-click → Open, or allow it in System Settings → Privacy & Security. The release binary is universal (arm64 + x86_64) and needs macOS 13 or newer.
 
 Or build it yourself — nothing but the Swift toolchain that ships with Xcode is required:
 
@@ -157,7 +167,7 @@ For private accounts, create a **read token** in tokens.ci Settings, then choose
 
 ### Offline checks
 
-Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The full AppKit app, Keychain dialog and native panel snapshots still require a Mac. Run `./build.sh --universal` and the existing `--panel-png`/`--panel-probe` diagnostics there before shipping.
+Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.11.0 macOS release workflow passed those 45 checks, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
 
 ## Configuration
 

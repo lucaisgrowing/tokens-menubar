@@ -9,8 +9,6 @@
 
 <h1 align="center">TokensBar</h1>
 
-版本变更：[CHANGELOG.md](CHANGELOG.md)。
-
 <p align="center">
   在 macOS 菜单栏上看 <a href="https://tokens.ci">tokens.ci</a> 的 token 用量和排名，不用再开网页。
 </p>
@@ -25,11 +23,23 @@
 
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
-> **macOS 27 · Apple silicon：** Rosetta 2 没了，所以 `tokens` CLI 必须是原生 **arm64** 版 —— 在 Apple silicon 的 Homebrew 上 `brew install owo-network/brew/tokens`。Intel Homebrew 留下的 x86_64 版 `tokens` 根本起不来；1.9.1 起 TokensBar 会跳过它、并显示原因，而不是光秃秃一句「提交失败」。
+## 1.11.0 更新了什么
+
+- 在现有青绿界面上精修，不换布局：360pt 面板、更协调的留白和卡片、更清楚的进度条，保留原版系统字体、字号和字重。
+- 支持私密账号的可选 read token，保存在 macOS 钥匙串中，只发送给配置的 HTTPS 个人数据接口。
+- 刷新失败保留有效旧数据，分清成功获取与刷新尝试，并区分网络、认证、404 和限流错误；API 轮询下限为 60 秒，默认仍为 300 秒。
+- 明确全设备与本机数据、UTC 日期和估算费用；非零但不足 1% 的模型占比显示为 `<1%`。
+- 加入按下与拖出取消反馈、可中断图表转场、减少动态效果和增强对比／不透明适配；修正 CLI 文档，新增 45 项纯 Swift 回归检查。
+
+[下载 v1.11.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.0) · [完整更新日志](CHANGELOG.md)
+
+下方图片由已发布的 **1.11.0** App 在 macOS 上通过原生 AppKit 离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
+
+> **Apple silicon：** 建议用 Apple 芯片版 Homebrew 安装原生 **arm64** `tokens` CLI（`brew install owo-network/brew/tokens`）。仅支持 Intel 的 CLI 需要 Rosetta 才能运行；TokensBar 优先选择可用的原生安装，无法启动时会显示原因，而不是只说「提交失败」。
 
 <p align="center">
-  <img src="docs/menu.png" width="380" alt="TokensBar 下拉面板（浅色）">
-  <img src="docs/menu-dark.png" width="380" alt="TokensBar 下拉面板（深色）">
+  <img src="docs/zh/menu.png" width="380" alt="TokensBar 下拉面板（浅色）">
+  <img src="docs/zh/menu-dark.png" width="380" alt="TokensBar 下拉面板（深色）">
 </p>
 
 ```
@@ -55,14 +65,14 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 右键点图标 —— 或者点面板右上角的 ⋯ —— 都能拿到同一组动作。⋯ 不再往面板上盖一层菜单，
 而是把面板翻到第二页：提交、刷新、排名和语言做成一排胶囊按钮、开机启动是个开关，再往下是
-打开主页、**复制战绩卡**（把你战绩渲染成一张图直接进剪贴板）、检查更新、赞助和退出，顶上是 **‹ 操作与设置**，底下是当前版本号。两套界面现在
+打开主页、**复制战绩卡**（把你战绩渲染成一张图直接进剪贴板）、私密账号读取令牌、检查更新、赞助和退出，顶上是 **‹ 操作与设置**，底下是当前版本号。两套界面现在
 彻底分开了：左键点图标出面板，右键点图标出那个纯 NSMenu，面板里没有任何一处再把菜单盖回来。
 菜单的动作和快捷键都没变，只有一层：数字排在最上面，点它们打开的模型分布从菜单栏算起只要
 一次点击；排名和语言的选项改成标题下面的缩进行，不再做成子菜单。
 
 <p align="center">
-  <img src="docs/panel-actions.png" width="380" alt="面板里的操作页（浅色）">
-  <img src="docs/panel-actions-dark.png" width="380" alt="面板里的操作页（深色）">
+  <img src="docs/zh/panel-actions.png" width="380" alt="面板里的操作页（浅色）">
+  <img src="docs/zh/panel-actions-dark.png" width="380" alt="面板里的操作页（深色）">
 </p>
 
 ## 模型分布饼图
@@ -77,8 +87,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 面板打开、以及切换 Token / 费用 时，图表会有一段画入动效。鼠标悬停某一块（或图例里对应那一行），两边会同时高亮、其余变淡，中间的读数换成那个模型自己的数字。
 
 <p align="center">
-  <img src="docs/chart-today-tokens.png" width="360" alt="今日模型分布（按 token）">
-  <img src="docs/chart-lifetime-cost.png" width="360" alt="累计模型分布（按费用）">
+  <img src="docs/zh/chart-today-tokens.png" width="360" alt="今日模型分布（按 token）">
+  <img src="docs/zh/chart-lifetime-cost.png" width="360" alt="累计模型分布（按费用）">
 </p>
 
 ## 贡献图
@@ -86,7 +96,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 面板上的近 7 天柱状图 —— 或者菜单里的**活跃天数**那一行 —— 点开是一年的每日 token 活动热力图，跟网站上那块是同一个视图。悬停某一天会读出当天的 token、花费、消息条数和各客户端占比；没悬停时显示活跃天数和统计区间。
 
 <p align="center">
-  <img src="docs/contributions.png" width="640" alt="一年的每日 token 活动热力图">
+  <img src="docs/zh/contributions.png" width="640" alt="一年的每日 token 活动热力图">
 </p>
 
 右上角的切换决定下方读数按什么拆分：**模型**、**客户端**、**金额**。切到金额时格子的深浅也会跟着变 —— token 的深浅用 API 给的强度，金额的深浅是按每日花费的四分位自己算的，所以「量大但便宜」和「量小但贵」两种日子看起来不一样。
@@ -122,7 +132,7 @@ xattr -dr com.apple.quarantine /Applications/TokensBar.app
 open /Applications/TokensBar.app
 ```
 
-发布的包是 ad-hoc 签名、**没有公证**的，所以隔离标记不去掉 macOS 会直接拒绝打开。也可以右键 → 打开，或者去「系统设置 → 隐私与安全性」里点「仍要打开」。release 里的二进制是 universal（arm64 + x86_64），要求 macOS 13 以上。
+发布的包是 ad-hoc 签名、**没有公证**的，macOS 可能通过 Gatekeeper 拦截。请只在信任下载来源时放行；也可以右键 → 打开，或者去「系统设置 → 隐私与安全性」里点「仍要打开」。release 里的二进制是 universal（arm64 + x86_64），要求 macOS 13 以上。
 
 也可以自己编，除了 Xcode 自带的 Swift 工具链什么都不需要：
 
@@ -146,7 +156,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 ### 离线检查
 
-安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。完整 AppKit 应用、钥匙串对话框与原生界面截图仍需在 Mac 上验收；发布前运行 `./build.sh --universal` 及现有的 `--panel-png` / `--panel-probe` 诊断。
+安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.11.0 的 macOS 发布流程已通过这 45 项检查、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
 
 ## 配置
 
