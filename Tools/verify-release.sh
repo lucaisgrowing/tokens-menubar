@@ -13,7 +13,7 @@ test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Con
 test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = "ci.tokens.menubar"
 test -s "$APP/Contents/Resources/AppIcon.icns"
 test -x "$BIN"
-lipo -verify_arch arm64 x86_64 "$BIN"
+lipo "$BIN" -verify_arch arm64 x86_64
 lipo -archs "$BIN"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dv --verbose=2 "$APP" 2>&1
