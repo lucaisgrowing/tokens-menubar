@@ -1,0 +1,35 @@
+name: README snapshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Published release to render (no binary changes)
+        required: true
+        default: v1.11.0
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Download and verify published app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          mkdir released
+          gh release download "$RELEASE" --repo "$GITHUB_REPOSITORY" --dir released --pattern TokensBar.app.zip --pattern SHA256SUMS.txt
+          (cd released && shasum -a 256 -c SHA256SUMS.txt)
+          ditto -x -k released/TokensBar.app.zip released
+          codesign --verify --deep --strict released/TokensBar.app
+      - name: Render native AppKit views using synthetic local data
+        run: bash Tools/render-readme-snapshots.sh "$PWD/released/TokensBar.app" readme-snapshots
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TokensBar-readme-snapshots
+          path: readme-snapshots
+          if-no-files-found: error
