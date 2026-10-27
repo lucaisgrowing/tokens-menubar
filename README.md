@@ -206,7 +206,7 @@ Switching the rank or the language from the menu stores the choice in `UserDefau
 
 Clicking it installs in place: it downloads that release's `TokensBar.app.zip`, checks the bundle inside really is the advertised version, swaps it for the running app and relaunches — no browser, no unzip, no drag into `/Applications`, and no quarantine flag to clear. It asks first, and nothing is ever installed without that confirmation. If the app sits somewhere this account cannot write, or the release has no zip attached, the release page opens instead, exactly as it did before.
 
-The trust here is HTTPS to GitHub. The download is not code-signature-verified, because the builds are ad-hoc signed rather than notarised — a `SHA-256` published alongside the same download would prove nothing extra.
+The updater trusts HTTPS to GitHub and checks the bundle version; it does not verify the download's code signature or the release checksum. The release also includes `SHA256SUMS.txt` for manual download-integrity checks (`shasum -a 256 -c SHA256SUMS.txt`, in the directory containing the ZIP). A checksum hosted beside the download does not independently authenticate the publisher. The app remains ad-hoc signed, without Developer ID signing or Apple notarisation.
 
 ## Command line
 
