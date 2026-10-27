@@ -1,16 +1,16 @@
 # README screenshot provenance
 
-The English and Chinese READMEs use native AppKit offscreen renders of the published **TokensBar v1.11.0 (build 17)** app. They are not design mockups. The unmodified release executable draws the same panel, actions page, model chart and contributions views through its existing diagnostic PNG commands.
+The English and Chinese READMEs use native AppKit offscreen renders of the published **TokensBar v1.11.1 (build 18)** app. They are not design mockups. The unmodified release executable draws the same panel, actions page, model chart and contributions views through its existing diagnostic PNG commands.
 
 The renders use synthetic `demo-user` profile, leaderboard and CLI data. No real account, login, read token, Keychain credential or production API request is used. The diagnostic renderer supplies a fixed backing surface instead of the live popover's translucent material; these images are not desktop screen captures or interactive acceptance tests.
 
 ## Current images
 
-[Successful rendering run](https://github.com/lucaisgrowing/tokens-menubar/actions/runs/40480548974) — 2026-10-27, macOS 26.6.2 (25G83).
+[Successful rendering run](https://github.com/lucaisgrowing/tokens-menubar/actions/runs/40484684242) — 2026-10-27, macOS 26.6.2 (25G83).
 
-- Source: the `TokensBar.app.zip` asset from the [v1.11.0 release](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.0), downloaded and checked against the release's `SHA256SUMS.txt` before extraction.
-- Bundle version checked: `1.11.0`; strict ad-hoc signature verification passed before rendering.
-- Rendered executable SHA-256: `ac583b50cb41309485eee657c90738ad14c8294022ae333a99b7bedb26ba4743` (the executable, not the ZIP asset).
+- Source: the `TokensBar.app.zip` asset from the [v1.11.1 release](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1), downloaded and checked against the release's `SHA256SUMS.txt` before extraction.
+- Bundle version checked: `1.11.1`; strict ad-hoc signature verification passed before rendering.
+- Rendered executable SHA-256: `806e23c07e60b8a9ad4cd22e47f65d9e3fdb8213b65c3e647a5c10eaf04e4399` (the executable, not the ZIP asset).
 - English images: `docs/*.png` in the table below. Chinese images: the matching names under `docs/zh/`.
 
 | File | View | Native PNG dimensions |
@@ -23,14 +23,14 @@ The renders use synthetic `demo-user` profile, leaderboard and CLI data. No real
 | `chart-lifetime-cost.png` | Lifetime models by cost, dark | 380 × 374 |
 | `contributions.png` | Annual contributions, light | 748 × 216 |
 
-All 14 PNGs were opened for visual review after download. The main panel and actions page cover both appearances; the chart examples deliberately illustrate different periods/metrics and appearances. The Chinese README links to Chinese UI renders rather than reusing the English UI images. The icon and donation QR images were unchanged because their source assets did not change in this release.
+All 14 README PNGs were opened for visual review after download. The restored app accent is the original deep-green palette (sRGB #2E676B light / #427E82 dark), no longer the macOS system accent. Small foreground accents are lifted in dark mode for contrast; semantic success/error and model-category colors are intentionally unchanged. Additional native submit-hover, informational-state, share-card and popover-probe renders were reviewed with the artifact; those are validation images, not README replacements. The main panel and actions page cover both appearances; the chart examples deliberately illustrate different periods/metrics and appearances. The Chinese README links to Chinese UI renders rather than reusing the English UI images. The icon and donation QR images were unchanged because their source assets did not change in this release.
 
 ## Reproduce for a release
 
 Run the [README snapshots workflow](../.github/workflows/readme-snapshots.yml) with a published release tag:
 
 ```sh
-gh workflow run readme-snapshots.yml --ref main -f release=v1.11.0
+gh workflow run readme-snapshots.yml --ref main -f release=v1.11.1
 ```
 
 The workflow downloads the existing release; it does not rebuild, retag or publish it. On a disposable macOS runner, [`Tools/render-readme-snapshots.sh`](../Tools/render-readme-snapshots.sh) starts the loopback-only [`readme-fixture-server.py`](../Tools/readme-fixture-server.py), installs a temporary synthetic `tokens submit --dry-run` responder, and invokes the released app's `--panel-png`, `--chart-png` and `--contrib-png` commands in each language. It checks all PNGs exist and records their dimensions, macOS version, app version and executable digest in the artifact. Temporary config and CLI files are removed on exit; the script refuses to replace pre-existing ones. Run it only on a disposable runner, not a personal Mac.
@@ -39,4 +39,4 @@ Download `TokensBar-readme-snapshots` from the completed workflow, inspect every
 
 ## 中文说明
 
-这 14 张图片由已发布的 1.11.0 原生 App 在 macOS 上离屏渲染，使用虚构的 `demo-user` API／CLI 数据；不是 Linux 近似图，也没有使用真实账号、钥匙串令牌或线上 API。诊断模式以固定底色代替实际弹层材质。中英文图片分别生成，浅色／深色主面板与操作页、两种模型图表和贡献图均已逐张检查。它们验证的是实际二进制的静态渲染，不代替真实账号、钥匙串、CLI 和界面交互的人工验收。以后更新版本时，可运行上述工作流、检查并替换图片，同时更新 README 的版本说明和本记录。
+这 14 张图片由已发布的 1.11.1 原生 App 在 macOS 上离屏渲染，使用虚构的 `demo-user` API／CLI 数据；不是 Linux 近似图，也没有使用真实账号、钥匙串令牌或线上 API。诊断模式以固定底色代替实际弹层材质。中英文图片分别生成，浅色／深色主面板与操作页、两种模型图表和贡献图均已逐张检查。按钮、高亮与活动条已恢复原版墨绿／深绿，不再跟随系统蓝色；模型分类色与成功／错误状态色保持原有语义。另外检查了提交悬停、信息状态、战绩卡和原生弹层探针图。它们验证的是实际二进制的静态渲染，不代替真实账号、钥匙串、CLI 和界面交互的人工验收。以后更新版本时，可运行上述工作流、检查并替换图片，同时更新 README 的版本说明和本记录。
