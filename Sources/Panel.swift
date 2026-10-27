@@ -17,6 +17,7 @@ enum PanelAction: Equatable {
     case chart(ChartScope)
     case submit
     case refresh
+    case readToken
     case setRank(RankMode)
     case setLanguage(Lang)
     case toggleLogin
@@ -39,6 +40,7 @@ extension PanelAction: CustomStringConvertible {
         case .chart(let scope): return scope == .today ? "chart(today)" : "chart(lifetime)"
         case .submit: return "submit"
         case .refresh: return "refresh"
+        case .readToken: return "read-token"
         case .setRank(let mode): return "rank(\(mode.rawValue))"
         case .setLanguage(let lang): return "language(\(lang.rawValue))"
         case .toggleLogin: return "launch-at-login"
@@ -93,6 +95,13 @@ struct PanelData {
     var localStamp: Date?
     var serverStamp: Date?
     var serverFailed = false
+    var serverLoading = false
+    var serverError: String?
+    var serverFetchedAt: Date?
+    var serverAttemptedAt: Date?
+    var hasServer = false
+    var hasLocal = false
+    var modelsAreServer = false
     var isStale = false
     var busy = false
     var transient: String?
@@ -133,6 +142,9 @@ extension PanelData {
             todayTokens = local.todayTokens
             todayCost = local.todayCost
         }
+        hasServer = server != nil
+        hasLocal = local.updatedAt != nil
+        modelsAreServer = !(server?.todayModels.isEmpty ?? true)
         localTokens = local.todayTokens
         localCost = local.todayCost
         localFailed = local.failed
@@ -241,7 +253,10 @@ private struct PanelLayout {
 func panelGrey(_ light: CGFloat, _ dark: CGFloat, _ id: String) -> NSColor {
     NSColor(name: NSColor.Name("tokensbar.panel." + id)) { appearance in
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return NSColor(white: isDark ? 1 : 0, alpha: isDark ? dark : light)
+        let contrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        let alpha = isDark ? dark : light
+        return NSColor(white: isDark ? 1 : 0,
+                       alpha: contrast ? min(0.35, alpha * 1.8) : alpha)
     }
 }
 
@@ -258,10 +273,11 @@ extension NSView {
     }
 
     func text(_ s: String, in rect: NSRect, font: NSFont,
-              colour: NSColor = .labelColor, align: NSTextAlignment = .left) {
+              colour: NSColor = .labelColor, align: NSTextAlignment = .left,
+              wrap: Bool = false) {
         let style = NSMutableParagraphStyle()
         style.alignment = align
-        style.lineBreakMode = .byTruncatingTail
+        style.lineBreakMode = wrap ? .byWordWrapping : .byTruncatingTail
         NSAttributedString(string: s, attributes: [
             .font: font, .foregroundColor: colour, .paragraphStyle: style,
         ]).draw(in: rect)
@@ -316,13 +332,26 @@ final class PanelView: NSView {
     var data = PanelData() { didSet { invalidate() } }
     var onAction: ((PanelAction) -> Void)?
 
-    static let width: CGFloat = 340
-    private let pad: CGFloat = 18
+    static let width: CGFloat = 360
+    private let pad: CGFloat = 20
 
     private var cache: PanelLayout?
     private var hits: [(NSRect, PanelAction)] = []
     private var hoveredHit: Int?
     private var hoveredDay: Int?
+    private var pressedAction: PanelAction?
+    private var pressedRect: NSRect?
+    private var tooltipStrings: [NSView.ToolTipTag: String] = [:]
+
+    @objc func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag,
+              point: NSPoint, userData: UnsafeMutableRawPointer?) -> String {
+        tooltipStrings[tag] ?? ""
+    }
+
+    private func tooltip(_ rect: NSRect, _ text: String) {
+        let tag = addToolTip(rect, owner: self, userData: nil)
+        tooltipStrings[tag] = text
+    }
 
     override var isFlipped: Bool { true }
 
@@ -330,14 +359,18 @@ final class PanelView: NSView {
         cache = nil
         needsDisplay = true
         invalidateIntrinsicContentSize()
+        // Refresh source/status tooltips even when geometry did not change.
+        if window != nil { updateTrackingAreas() }
     }
 
     /// Today's models folded to the donut's slices, so a dot here is the same
     /// colour as that model's segment in the chart popover.
     private var slices: [ChartDatum] { chartSlices(data.models, metric: .tokens) }
 
-    private var hasBoard: Bool { data.primary != nil }
-    private var hasWeekBars: Bool { data.recent.contains { $0.tokens > 0 } }
+    // Keep the existing sections in place while loading/empty, rather than
+    // inserting them later and shifting everything under the pointer.
+    private var hasBoard: Bool { true }
+    private var hasWeekBars: Bool { true }
 
     /// Only a submit outcome earns the badge. A background notice — an update
     /// check, say — stays on the timestamp line as plain grey text, which is where
@@ -374,8 +407,8 @@ final class PanelView: NSView {
         y += 38
         l.heroSub = NSRect(x: pad, y: y, width: inner, height: 15)
         y += 16
-        l.heroLocal = NSRect(x: pad, y: y, width: inner, height: 14)
-        y += 14
+        l.heroLocal = NSRect(x: pad, y: y, width: inner, height: 16)
+        y += 18
         l.hero = NSRect(x: pad - 6, y: l.heroValue.minY - 6,
                         width: inner + 12, height: y - l.heroValue.minY + 10)
         y += 13
@@ -383,33 +416,33 @@ final class PanelView: NSView {
         y += 13
 
         if hasBoard {
-            l.boardCaption = NSRect(x: pad, y: y + 1, width: inner - 118, height: 14)
+            l.boardCaption = NSRect(x: pad, y: y + 1, width: inner - 118, height: 16)
             l.boardRank = NSRect(x: w - pad - 118, y: y, width: 118, height: 16)
             y += 20
             l.boardTrack = NSRect(x: pad, y: y, width: inner, height: 8)
             y += 12
-            l.boardLabel = NSRect(x: pad, y: y, width: inner - 50, height: 14)
-            l.boardPct = NSRect(x: w - pad - 50, y: y, width: 50, height: 14)
-            y += 22
+            l.boardLabel = NSRect(x: pad, y: y, width: inner - 50, height: 16)
+            l.boardPct = NSRect(x: w - pad - 50, y: y, width: 50, height: 16)
+            y += 24
         }
 
-        l.avgCaption = NSRect(x: pad, y: y, width: inner - 96, height: 13)
-        l.avgValue = NSRect(x: w - pad - 96, y: y, width: 96, height: 13)
-        y += 15
+        l.avgCaption = NSRect(x: pad, y: y, width: inner - 96, height: 15)
+        l.avgValue = NSRect(x: w - pad - 96, y: y, width: 96, height: 15)
+        y += 18
         l.avgTrack = NSRect(x: pad, y: y, width: inner, height: 6)
         y += 10
-        l.avgSub = NSRect(x: pad, y: y, width: inner, height: 13)
-        y += 21
+        l.avgSub = NSRect(x: pad, y: y, width: inner, height: 15)
+        y += 23
 
         let cardW = (inner - 10) / 2
-        l.cards = [NSRect(x: pad, y: y, width: cardW, height: 54),
-                   NSRect(x: pad + cardW + 10, y: y, width: cardW, height: 54)]
-        y += 54 + 13
+        l.cards = [NSRect(x: pad, y: y, width: cardW, height: 58),
+                   NSRect(x: pad + cardW + 10, y: y, width: cardW, height: 58)]
+        y += 58 + 13
         l.rules.append(y)
         y += 13
 
         if hasWeekBars {
-            l.weekCaption = NSRect(x: pad, y: y, width: inner - 150, height: 13)
+            l.weekCaption = NSRect(x: pad, y: y, width: inner - 150, height: 15)
             l.weekValue = NSRect(x: w - pad - 150, y: y - 1, width: 150, height: 15)
             // 22, not 18: the readout on the right is a size up from the caption, so
             // its descenders reach further down than the caption's do, and the card
@@ -456,22 +489,22 @@ final class PanelView: NSView {
             y += 13
         }
 
-        if !slices.isEmpty {
-            l.modelCaption = NSRect(x: pad, y: y, width: inner - 90, height: 13)
-            l.modelValue = NSRect(x: w - pad - 90, y: y, width: 90, height: 13)
-            y += 17
+        do {
+            l.modelCaption = NSRect(x: pad, y: y, width: inner - 90, height: 15)
+            l.modelValue = NSRect(x: w - pad - 90, y: y, width: 90, height: 15)
+            y += 20
             l.modelRows = slices.indices.map {
-                NSRect(x: pad - 4, y: y + CGFloat($0) * 18, width: inner + 8, height: 18)
+                NSRect(x: pad - 4, y: y + CGFloat($0) * 20, width: inner + 8, height: 20)
             }
-            y += CGFloat(slices.count) * 18 + 11
+            y += max(1, CGFloat(slices.count)) * 20 + 11
             l.rules.append(y)
             y += 12
         }
 
         // The hint line gets the full width: it carries the longest string in the
         // panel, so it cannot share a row with the button.
-        l.hint = NSRect(x: pad, y: y, width: inner, height: 14)
-        y += 18
+        l.hint = NSRect(x: pad, y: y, width: inner, height: 30)
+        y += 34
 
         let submitTitle = data.busy ? t("panel.submitting") : t("panel.submit")
         let submitW = max(76, ceil(measure(submitTitle, font: buttonFont).width) + 34)
@@ -516,7 +549,7 @@ final class PanelView: NSView {
         if !l.modelRows.isEmpty {
             add(l.modelRows[0].union(l.modelRows[l.modelRows.count - 1]), .chart(.today))
         }
-        add(l.submit, .submit, grow: false)
+        if data.canSubmit && !data.busy { add(l.submit, .submit, grow: false) }
         return out
     }
 
@@ -566,7 +599,12 @@ final class PanelView: NSView {
     /// What clicking the hovered block does, or how to use the panel when nothing
     /// is hovered.
     private var hintText: String {
-        guard let i = hoveredHit, hits.indices.contains(i) else { return t("panel.hint") }
+        guard let i = hoveredHit, hits.indices.contains(i) else {
+            if let error = data.serverError { return error }
+            if data.serverLoading { return t(data.hasServer ? "panel.refreshing" : "panel.loading") }
+            if data.isStale { return t("stamp.stale") }
+            return t("panel.hint")
+        }
         switch hits[i].1 {
         case .profile: return t("hint.profile")
         case .menuPage: return t("hint.menu")
@@ -604,8 +642,13 @@ final class PanelView: NSView {
         drawCards(l)
         if hasWeekBars { drawWeek(l, accent: accent) }
         if data.monthCost > 0 || data.activeDays > 0 { drawMonth(l, accent: accent) }
-        if !l.modelRows.isEmpty { drawModels(l) }
+        drawModels(l)
         drawFooter(l, accent: accent)
+        // apple-design: instant press feedback; commit remains on release.
+        if let rect = pressedRect {
+            fill(rect, radius: 7, colour: accent.withAlphaComponent(0.14))
+            stroke(rect, radius: 7, colour: accent.withAlphaComponent(0.35))
+        }
     }
 
     private func drawHeader(_ l: PanelLayout) {
@@ -651,8 +694,9 @@ final class PanelView: NSView {
     }
 
     private func drawHero(_ l: PanelLayout) {
-        text(fmtTokens(data.todayTokens), in: l.heroValue, font: heroFont)
-        text(fmtMoney(data.todayCost), in: l.heroCost, font: valueFont,
+        let available = data.todayIsServer || (data.hasLocal && !data.localFailed)
+        text(available ? fmtTokens(data.todayTokens) : "—", in: l.heroValue, font: heroFont)
+        text(available ? "≈" + fmtMoney(data.todayCost) : "—", in: l.heroCost, font: valueFont,
              colour: .secondaryLabelColor, align: .right)
         let cap = caption(data.todayIsServer ? t("panel.todayAll") : t("panel.todayLocalOnly"))
         text(cap, in: l.heroSub, font: captionFont, colour: .secondaryLabelColor)
@@ -660,12 +704,14 @@ final class PanelView: NSView {
         let sub: String
         if data.localFailed {
             sub = t("panel.localFailed")
+        } else if !data.hasLocal {
+            sub = t("panel.localLoading")
         } else if data.todayIsServer {
             sub = t("panel.thisMac", fmtTokens(data.localTokens), fmtMoney(data.localCost))
-        } else if data.serverFailed {
-            sub = t("panel.serverFailedShort")
-        } else {
+        } else if data.hasServer {
             sub = t("panel.awaitingSubmit")
+        } else {
+            sub = t("panel.localFallback")
         }
         // Secondary rather than tertiary: the popover's material is translucent, and
         // tertiary greys all but vanish on a bright wallpaper.
@@ -675,10 +721,18 @@ final class PanelView: NSView {
     /// The board the menu bar shows, with the gap to the person above as a bar:
     /// the bar is own-total over their total, so a full bar means a tie.
     private func drawBoard(_ l: PanelLayout, accent: NSColor) {
-        guard let st = data.primary else { return }
+        guard let st = data.primary else {
+            text(caption(data.primaryMode.label), in: l.boardCaption, font: captionFont,
+                 colour: .secondaryLabelColor)
+            text("—", in: l.boardRank, font: valueFont, align: .right)
+            bar(l.boardTrack, progress: 0, colour: accent)
+            text(t(data.hasServer ? "panel.rankUnknown" : "panel.waitingServer"),
+                 in: l.boardLabel, font: smallFont, colour: .secondaryLabelColor)
+            return
+        }
         fill(NSRect(x: l.boardCaption.minX, y: l.boardCaption.minY + 4, width: 6, height: 6),
              radius: 3, colour: accent)
-        text(caption(data.primaryMode.label),
+        text(caption(data.primaryMode.label + " · " + t("panel.rankProgress")),
              in: NSRect(x: l.boardCaption.minX + 11, y: l.boardCaption.minY,
                         width: l.boardCaption.width - 11, height: l.boardCaption.height),
              font: captionFont, colour: .secondaryLabelColor)
@@ -695,10 +749,12 @@ final class PanelView: NSView {
             label = t("panel.toNext", fmtTokens(max(0, above.tokens - st.tokens)),
                       above.rank, above.username)
             pct = "\(Int((progress * 100).rounded()))%"
-        } else {
+        } else if st.rank == 1 {
             progress = 1
             label = t("panel.atTop")
             pct = "100%"
+        } else {
+            label = t("panel.rankGapUnknown")
         }
         bar(l.boardTrack, progress: progress, colour: accent)
         text(label, in: l.boardLabel, font: smallFont, colour: .secondaryLabelColor)
@@ -708,7 +764,8 @@ final class PanelView: NSView {
     /// Today against the seven days before it. The track spans twice the average
     /// so the midpoint tick is "an average day" and passing it is visible.
     private func drawAverage(_ l: PanelLayout, accent: NSColor) {
-        let avg = data.avgTokens
+        // A live local scan and an all-device baseline are different scopes.
+        let avg = data.todayIsServer ? data.avgTokens : 0
         let ratio = avg > 0 ? Double(data.todayTokens) / avg : 0
         text(caption(t("panel.vsAvg")), in: l.avgCaption, font: captionFont,
              colour: .secondaryLabelColor)
@@ -720,29 +777,31 @@ final class PanelView: NSView {
              font: .monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
              colour: ratio >= 1 ? accent : .secondaryLabelColor, align: .right)
         bar(l.avgTrack, progress: CGFloat(min(1, ratio / 2)),
-            colour: ratio >= 1 ? accent : accent.withAlphaComponent(0.5))
+            colour: accent.withAlphaComponent(0.5))
         if avg > 0 {
             fill(NSRect(x: l.avgTrack.midX - 0.5, y: l.avgTrack.minY - 2,
                         width: 1, height: l.avgTrack.height + 4),
                  radius: 0, colour: .tertiaryLabelColor)
         }
-        text(t("panel.avgBest", fmtTokens(Int(avg.rounded())), fmtTokens(data.bestTokens)),
+        text(avg > 0 ? t("panel.avgBest", fmtTokens(Int(avg.rounded())), fmtTokens(data.bestTokens))
+                       : t("panel.avgUnavailable"),
              in: l.avgSub, font: smallFont, colour: .secondaryLabelColor)
     }
 
     private func card(_ rect: NSRect, caption cap: String, value: String, sub: String,
                       clickable: Bool = false) {
-        fill(rect, radius: 8, colour: panelCard)
+        fill(rect, radius: 9, colour: panelCard)
+        stroke(rect, radius: 9, colour: panelRule.withAlphaComponent(0.045), width: 0.5)
         let x = rect.minX + 10, w = rect.width - 20
-        text(cap, in: NSRect(x: x, y: rect.minY + 7, width: w, height: 13),
+        text(cap, in: NSRect(x: x, y: rect.minY + 7, width: w, height: 15),
              font: captionFont, colour: .secondaryLabelColor)
         if clickable {
             icon("chevron.right",
                  in: NSRect(x: rect.maxX - 17, y: rect.minY + 7, width: 9, height: 13),
                  size: 8, colour: .tertiaryLabelColor)
         }
-        text(value, in: NSRect(x: x, y: rect.minY + 20, width: w, height: 19), font: cardFont)
-        text(sub, in: NSRect(x: x, y: rect.minY + 38, width: w, height: 13),
+        text(value, in: NSRect(x: x, y: rect.minY + 23, width: w, height: 19), font: cardFont)
+        text(sub, in: NSRect(x: x, y: rect.minY + 41, width: w, height: 15),
              font: smallFont, colour: .secondaryLabelColor)
     }
 
@@ -755,13 +814,14 @@ final class PanelView: NSView {
                  sub: fmtTokens(st.tokens), clickable: true)
         } else {
             card(l.cards[0], caption: caption(t("row.lifetime")),
-                 value: data.serverFailed ? "—" : fmtTokens(data.lifetimeTokens),
-                 sub: data.serverFailed ? t("panel.serverFailedShort")
-                                        : fmtMoney(data.lifetimeCost))
+                 value: data.hasServer ? fmtTokens(data.lifetimeTokens) : "—",
+                 sub: data.hasServer ? "≈" + fmtMoney(data.lifetimeCost)
+                                     : t("panel.waitingServer"))
         }
-        card(l.cards[1], caption: caption(t("row.week")),
-             value: data.localFailed ? "—" : fmtTokens(data.weekTokens),
-             sub: data.localFailed ? t("panel.localFailed") : fmtMoney(data.weekCost))
+        card(l.cards[1], caption: caption(t("panel.weekLocal")),
+             value: data.localFailed || !data.hasLocal ? "—" : fmtTokens(data.weekTokens),
+             sub: data.localFailed ? t("panel.localFailed")
+                : !data.hasLocal ? t("panel.localLoading") : "≈" + fmtMoney(data.weekCost))
     }
 
     /// This month's total on a caption/value row like the week's, with the
@@ -773,7 +833,7 @@ final class PanelView: NSView {
                  colour: .secondaryLabelColor)
         }
         if l.monthValue != .zero {
-            let value = "\(fmtTokens(data.monthTokens))  ·  \(fmtMoney(data.monthCost))"
+            let value = "\(fmtTokens(data.monthTokens))  ·  ≈\(fmtMoney(data.monthCost))"
             text(value, in: l.monthValue,
                  font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
                  colour: .secondaryLabelColor, align: .right)
@@ -796,7 +856,7 @@ final class PanelView: NSView {
     private func drawWeek(_ l: PanelLayout, accent: NSColor) {
         let days = data.recent
         guard days.count == l.barColumns.count else { return }
-        let cap = caption(t("panel.last7"))
+        let cap = caption(t("panel.last7UTC"))
         text(cap, in: l.weekCaption, font: captionFont, colour: .secondaryLabelColor)
         chevron(after: cap, font: captionFont, in: l.weekCaption)
 
@@ -817,7 +877,7 @@ final class PanelView: NSView {
             summary = "\(fmtTokens(days.reduce(0) { $0 + $1.tokens }))  ·  "
                 + fmtMoney(days.reduce(0.0) { $0 + $1.cost })
         }
-        text(summary, in: l.weekValue,
+        text(data.hasServer ? summary : "—", in: l.weekValue,
              font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
              colour: .secondaryLabelColor, align: .right)
 
@@ -826,7 +886,7 @@ final class PanelView: NSView {
         for (i, day) in days.enumerated() {
             let col = l.barColumns[i]
             let barW = min(20, col.width - 8)
-            let h = max(3, l.barArea.height * CGFloat(day.tokens) / CGFloat(peak))
+            let h = day.tokens > 0 ? max(3, l.barArea.height * CGFloat(day.tokens) / CGFloat(peak)) : 0
             let isToday = i == days.count - 1
             let hovering = hoveredDay == i
             let colour = hovering ? accent
@@ -839,6 +899,10 @@ final class PanelView: NSView {
                  colour: hovering || isToday ? .labelColor : .secondaryLabelColor,
                  align: .center)
         }
+        if !data.hasServer || !data.recent.contains(where: { $0.tokens > 0 }) {
+            text(t(data.hasServer ? "panel.emptyWeek" : "panel.waitingServer"),
+                 in: l.barArea, font: smallFont, colour: .secondaryLabelColor, align: .center)
+        }
     }
 
     private func drawModels(_ l: PanelLayout) {
@@ -847,22 +911,28 @@ final class PanelView: NSView {
         let cap = caption(t("panel.modelsToday"))
         text(cap, in: l.modelCaption, font: captionFont, colour: .secondaryLabelColor)
         chevron(after: cap, font: captionFont, in: l.modelCaption)
-        text(caption(data.todayIsServer ? t("panel.allDevices") : t("panel.thisMacOnly")),
+        text(caption(data.modelsAreServer ? t("panel.allDevices") : t("panel.thisMacOnly")),
              in: l.modelValue, font: captionFont, colour: .secondaryLabelColor, align: .right)
+        if s.isEmpty {
+            text(t(data.hasServer ? "panel.noModels" : "panel.waitingServer"),
+                 in: NSRect(x: l.modelCaption.minX, y: l.modelCaption.maxY + 5,
+                            width: l.modelCaption.width + l.modelValue.width, height: 16),
+                 font: smallFont, colour: .secondaryLabelColor)
+        }
         for (i, slice) in s.enumerated() where l.modelRows.indices.contains(i) {
             let row = l.modelRows[i]
-            fill(NSRect(x: row.minX + 4, y: row.minY + 6, width: 7, height: 7),
+            fill(NSRect(x: row.minX + 4, y: row.minY + 7, width: 7, height: 7),
                  radius: 3.5, colour: chartPalette[i % chartPalette.count])
             text(slice.label,
                  in: NSRect(x: row.minX + 19, y: row.minY + 1,
-                            width: row.width - 150, height: 15),
+                            width: row.width - 132, height: 17),
                  font: bodyFont)
             text(fmtTokens(slice.tokens),
-                 in: NSRect(x: row.maxX - 118, y: row.minY + 2, width: 62, height: 14),
+                 in: NSRect(x: row.maxX - 108, y: row.minY + 2, width: 62, height: 16),
                  font: .monospacedDigitSystemFont(ofSize: 11, weight: .regular),
                  colour: .secondaryLabelColor, align: .right)
-            text(String(format: "%.0f%%", Double(slice.tokens) / total * 100),
-                 in: NSRect(x: row.maxX - 48, y: row.minY + 2, width: 44, height: 14),
+            text(fmtShare(slice.tokens, total: total),
+                 in: NSRect(x: row.maxX - 42, y: row.minY + 2, width: 38, height: 16),
                  font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium),
                  colour: .secondaryLabelColor, align: .right)
         }
@@ -882,7 +952,8 @@ final class PanelView: NSView {
         // panel is meant to be used at all.
         let hovering = hoveredHit.map { hits.indices.contains($0) } ?? false
         text(hintText, in: l.hint, font: smallFont,
-             colour: hovering ? .labelColor : .secondaryLabelColor)
+             colour: hovering ? .labelColor
+                : data.serverFailed ? .systemOrange : .secondaryLabelColor, wrap: true)
 
         // A submit outcome takes this slot as a badge; anything else is grey text.
         if hasNotice {
@@ -893,10 +964,11 @@ final class PanelView: NSView {
                 stamp = transient
             } else {
                 var bits: [String] = []
-                if let d = data.localStamp { bits.append(t("stamp.local", fmtClock(d))) }
-                if let d = data.serverStamp { bits.append(t("stamp.server", fmtClock(d))) }
-                if data.serverFailed { bits.append(t("panel.serverFailedShort")) }
-                if data.isStale { bits.append("⚠") }
+                if let d = data.serverFetchedAt { bits.append(t("stamp.fetched", fmtClock(d))) }
+                else if let d = data.serverStamp { bits.append(t("stamp.server", fmtClock(d))) }
+                if data.serverFailed { bits.append(t("panel.keptData")) }
+                else if data.serverLoading { bits.append(t("panel.refreshingShort")) }
+                else { bits.append(t("panel.estimated")) }
                 stamp = bits.joined(separator: "  ·  ")
             }
             text(stamp, in: l.stamp, font: smallFont, colour: .secondaryLabelColor)
@@ -904,7 +976,7 @@ final class PanelView: NSView {
 
         let onSubmit = hoveredHit.map { hits.indices.contains($0) && hits[$0].1 == .submit }
             ?? false
-        let enabled = !data.busy
+        let enabled = !data.busy && data.canSubmit
         fill(l.submit, radius: 7,
              colour: enabled ? accent.withAlphaComponent(onSubmit ? 1 : 0.88) : panelCard)
         text(data.busy ? t("panel.submitting") : t("panel.submit"),
@@ -925,6 +997,23 @@ final class PanelView: NSView {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
+        removeAllToolTips()
+        tooltipStrings.removeAll()
+        let l = geometry()
+        let sources = t("panel.sourceDetail")
+        tooltip(l.hero, sources)
+        tooltip(l.boardTrack.union(l.boardLabel), t("panel.rankDetail"))
+        tooltip(l.avgTrack.union(l.avgSub), t("panel.avgDetail"))
+        var status: [String] = []
+        if let error = data.serverError { status.append(error) }
+        if let d = data.serverAttemptedAt { status.append(t("stamp.attempted", fmtClock(d))) }
+        if let d = data.serverFetchedAt { status.append(t("stamp.fetched", fmtClock(d))) }
+        if let d = data.serverStamp { status.append(t("stamp.submitted", fmtClock(d))) }
+        if let d = data.localStamp { status.append(t("stamp.local", fmtClock(d))) }
+        tooltip(l.stamp.union(l.hint), status.joined(separator: "\n"))
+        for (index, row) in l.modelRows.enumerated() where slices.indices.contains(index) {
+            tooltip(row, slices[index].label)
+        }
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(
             rect: bounds,
@@ -950,10 +1039,32 @@ final class PanelView: NSView {
         needsDisplay = true
     }
 
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        let hit = regions(geometry()).first { $0.0.contains(p) }
+        pressedAction = hit?.1
+        pressedRect = hit?.0
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        // Dragging away cancels the highlight; returning restores it.
+        pressedRect = regions(geometry()).first {
+            $0.1 == pressedAction && $0.0.contains(p)
+        }?.0
+        needsDisplay = true
+    }
+
     override func mouseUp(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        guard let hit = regions(geometry()).first(where: { $0.0.contains(p) }) else { return }
-        if hit.1 == .submit && data.busy { return }
+        let hit = regions(geometry()).first { $0.0.contains(p) }
+        let action = pressedAction
+        pressedAction = nil
+        pressedRect = nil
+        needsDisplay = true
+        guard let hit, hit.1 == action else { return }
+        if hit.1 == .submit && (data.busy || !data.canSubmit) { return }
         onAction?(hit.1)
     }
 
@@ -981,6 +1092,22 @@ final class PanelContainer: NSView {
     let main = PanelView()
     let actions = PanelMenuView()
     var onAction: ((PanelAction) -> Void)?
+    private var accessibilityObserver: NSObjectProtocol?
+
+    override func draw(_ dirtyRect: NSRect) {
+        // Native equivalent of reduced-transparency/contrast media queries.
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast {
+            NSColor.windowBackgroundColor.setFill()
+            bounds.fill()
+        }
+    }
+
+    deinit {
+        if let observer = accessibilityObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+    }
 
     var page: PanelPage = .main { didSet { applyPage() } }
     var data = PanelData() {
@@ -994,6 +1121,13 @@ final class PanelContainer: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                self?.needsDisplay = true
+                self?.main.needsDisplay = true
+                self?.actions.needsDisplay = true
+            }
         addSubview(main)
         addSubview(actions)
         main.onAction = { [weak self] in self?.onAction?($0) }
@@ -1056,6 +1190,13 @@ final class PanelContainer: NSView {
 
         let blur = NSVisualEffectView(frame: NSRect(x: (bounds.width - w) / 2, y: 8, width: w, height: h))
         blur.material = .popover
+        let reducedMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+            || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast {
+            blur.blendingMode = .withinWindow
+            blur.wantsLayer = true
+            blur.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        }
         blur.blendingMode = .withinWindow
         blur.state = .active
         blur.wantsLayer = true
@@ -1076,12 +1217,17 @@ final class PanelContainer: NSView {
 
         addSubview(blur, positioned: .above, relativeTo: nil)
         noticeOverlay = blur
-        blur.alphaValue = 0
-        NSAnimationContext.runAnimationGroup { $0.duration = 0.16; blur.animator().alphaValue = 1 }
+        blur.alphaValue = reducedMotion ? 1 : 0
+        if !reducedMotion {
+            NSAnimationContext.runAnimationGroup { $0.duration = 0.16; blur.animator().alphaValue = 1 }
+        }
 
         let work = DispatchWorkItem { [weak self, weak blur] in
             guard let blur else { return }
-            NSAnimationContext.runAnimationGroup({ $0.duration = 0.3; blur.animator().alphaValue = 0 },
+            NSAnimationContext.runAnimationGroup({
+                $0.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.3
+                blur.animator().alphaValue = 0
+            },
                 completionHandler: {
                     blur.removeFromSuperview()
                     if self?.noticeOverlay === blur { self?.noticeOverlay = nil }

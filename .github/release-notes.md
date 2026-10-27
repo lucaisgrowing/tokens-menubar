@@ -1,24 +1,28 @@
+## TokensBar 1.11.0
+
+Keeps the original UI modules, teal light/dark style and original macOS typography, with refined spacing, cards, chart details and clearer data labels. Adds private-account read-token support through Keychain, differentiated API errors, truthful successful-update times, a 60-second API polling floor and CLI documentation/parser fixes.
+
+保留原有模块、青绿浅深色与原版系统字体，精修留白、卡片和图表；补上钥匙串 read token、错误分类、成功更新时间、60 秒 API 刷新下限，以及 CLI 文档/解析修正。完整记录见 [CHANGELOG.md](https://github.com/lucaisgrowing/tokens-menubar/blob/v1.11.0/CHANGELOG.md)。
+
+## Build and verification / 构建与验证
+
+Universal binary (arm64 + x86_64), macOS 13+. This workflow runs the 45 pure-Swift assertions, compiles the full AppKit/Security app on macOS, and verifies both CPU slices, bundle metadata and the ad-hoc signature before publishing. These checks do not verify interactive UI, Keychain prompts, private accounts or live CLI behavior.
+
+由 macOS GitHub Actions 构建；发布前运行 45 项纯 Swift 断言、完整编译并校验双架构、包信息和 ad-hoc 签名。尚未完成真人交互、钥匙串提示、私密账号和实际 CLI 的实机验收。
+
 ## Install / 安装
 
-Download `TokensBar.app.zip`, unzip, move it to `/Applications`, then clear the quarantine flag:
+Download `TokensBar.app.zip`, unzip and move `TokensBar.app` to `/Applications`. Requires the [`tokens`](https://github.com/missuo/tokens) CLI installed and logged in. Download the matching native CLI for your Mac architecture.
 
-解压后拖进 `/Applications`，然后去掉隔离标记：
+下载 `TokensBar.app.zip`，解压后将 App 移到 `/Applications`；需要安装并登录 [`tokens`](https://github.com/missuo/tokens) CLI，CLI 架构应与 Mac 匹配。
+
+This app is ad-hoc signed, not Developer ID signed or notarized. macOS may block opening an internet download. If you trust this release, use the opening exception in System Settings → Privacy & Security when available. Alternatively remove this app's quarantine flag only:
+
+这个包使用 ad-hoc 签名，没有 Developer ID 签名或 Apple 公证。macOS 可能拦截下载的 App；确认信任此发布后，可在「系统设置 → 隐私与安全性」允许打开，或只移除此 App 的隔离标记：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/TokensBar.app
 open /Applications/TokensBar.app
 ```
 
-The build is ad-hoc signed and **not notarised**, so macOS refuses to open it until the quarantine attribute is gone. Right-click → Open, or System Settings → Privacy & Security, works too.
-
-这个包是 ad-hoc 签名、**没有公证**的，隔离标记不去掉 macOS 会直接拒绝打开。也可以右键 → 打开，或者去「系统设置 → 隐私与安全性」里点「仍要打开」。
-
-Requires the [`tokens`](https://github.com/missuo/tokens) CLI installed and logged in (`brew install owo-network/brew/tokens && tokens login`). Universal binary (arm64 + x86_64), macOS 13+, built by GitHub Actions.
-
-需要先装好并登录 [`tokens`](https://github.com/missuo/tokens) CLI。universal 二进制（arm64 + x86_64），要求 macOS 13 以上，由 GitHub Actions 构建。
-
-> On Apple silicon, macOS 27 removed Rosetta 2 — the `tokens` CLI must be a native arm64 build, not an x86_64 one from an Intel Homebrew.
-> Apple silicon 上 macOS 27 移除了 Rosetta 2，`tokens` CLI 必须是原生 arm64 版，不能是 Intel Homebrew 里的 x86_64 版。
-
-MIT licensed. Credits to [missuo/tokens](https://github.com/missuo/tokens) and [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale) — TokensBar is only a menu bar front end for their work, and is not affiliated with tokens.ci.
-
+MIT licensed. Credits to [missuo/tokens](https://github.com/missuo/tokens) and [junhoyeo/tokscale](https://github.com/junhoyeo/tokscale). TokensBar is an unofficial menu bar front end, not affiliated with tokens.ci.

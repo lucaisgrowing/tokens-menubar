@@ -8,20 +8,30 @@ on:
     paths-ignore: ["**/*.md"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      # actions/checkout v7.0.1, pinned by commit so the action cannot change under us
+      # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-
+      - name: Regression tests
+        run: bash Tests/run.sh
       - name: Build universal app
         run: ./build.sh --universal
-
-      # The app itself needs the tokens CLI and network, neither of which the
-      # runner has, so only check the bundle came out intact.
-      - name: Check bundle
+      - name: Verify bundle
+        run: bash Tools/verify-release.sh
+      - name: Package
         run: |
-          lipo -archs TokensBar.app/Contents/MacOS/TokensBar
-          codesign --verify --deep --strict TokensBar.app
-          plutil -lint TokensBar.app/Contents/Info.plist
+          ditto -c -k --keepParent TokensBar.app TokensBar.app.zip
+          shasum -a 256 TokensBar.app.zip > SHA256SUMS.txt
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TokensBar-macos-universal
+          path: |
+            TokensBar.app.zip
+            SHA256SUMS.txt
+          if-no-files-found: error

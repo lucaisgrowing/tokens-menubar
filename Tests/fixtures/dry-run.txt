@@ -1,0 +1,4 @@
+Scanning sessions…
+Total tokens: 6,941,007
+Total cost: $6.55
+Dry run: nothing submitted.

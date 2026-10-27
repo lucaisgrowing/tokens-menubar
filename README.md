@@ -9,6 +9,8 @@
 
 <h1 align="center">TokensBar</h1>
 
+Release changes: [CHANGELOG.md](CHANGELOG.md).
+
 <p align="center">
   Your <a href="https://tokens.ci">tokens.ci</a> token usage and leaderboard rank, in the macOS menu bar — no browser tab needed.
 </p>
@@ -147,6 +149,16 @@ The app is an `LSUIElement`: menu bar only, no Dock icon and no windows.
 
 The icon lives at `Resources/AppIcon.icns` and is committed. It is drawn in code — edit `Tools/make-icon.swift` and run `swift Tools/make-icon.swift` to regenerate it.
 
+### Private accounts and data status
+
+For private accounts, create a **read token** in tokens.ci Settings, then choose **Actions & Settings → Private account read token…** (also in the right-click menu). Paste the `tkr_…` token into the secure field. It is stored only in macOS Keychain, scoped to the configured username and HTTPS API origin. Use the same dialog to replace or remove it. Never put it in `config.json`, a query string, screenshots or bug reports. Token-bearing profile requests do not follow redirects. Public leaderboard requests never carry the token.
+
+“Read HH:mm” means the last successful profile fetch, not the last refresh attempt or the server's last submission. Hover over the footer for all three times and the local scan time. On failure, old valid data stays visible with an explanation. A 404 can mean a private account **or** an unknown username; it is not evidence that today's usage is zero. The main figure uses submitted all-device data when available; the local line and week card describe this Mac. Costs are estimates (≈), not invoices. Daily server data uses UTC. API refresh settings below 60 seconds are clamped to 60.
+
+### Offline checks
+
+Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The full AppKit app, Keychain dialog and native panel snapshots still require a Mac. Run `./build.sh --universal` and the existing `--panel-png`/`--panel-probe` diagnostics there before shipping.
+
 ## Configuration
 
 Optional, `~/.config/tokens-menubar/config.json`:
@@ -172,7 +184,7 @@ Optional, `~/.config/tokens-menubar/config.json`:
 | `menuBarRank` | `all` | Which rank the menu bar shows: `all` (lifetime) or `today` |
 | `menuBarItems` | `["tokens", "rank"]` | What the menu-bar line shows, in order — any of `tokens`, `cost`, `rank` |
 | `dailyCostBudget` | `0` | Colour the readout amber past this daily spend (USD), red at 1.5×; `0` is off |
-| `apiRefreshSeconds` | 300 | How often to hit the API (minimum 30) |
+| `apiRefreshSeconds` | 300 | How often to hit the API (minimum 60) |
 | `localRefreshSeconds` | 120 | How often to run the local scan (minimum 30) |
 | `topModels` | 5 | Models listed in the dropdown, 0 to list none |
 
@@ -245,8 +257,8 @@ The "Launch at Login" checkbox in the menu does the same thing as `--set-login`.
 
 Two data sources:
 
-- **The API** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today`. Both ranks, the lifetime totals, the model split, the contributions grid, and **today's totals**. No credentials are sent.
-- **The local CLI** — `tokens --today --json` and `tokens --week --json`. This week, and today on this machine.
+- **The API** — the public read-only endpoints `GET /api/users/<name>` and `GET /api/leaderboard?period=all|today`. Both ranks, the lifetime totals, the model split, the contributions grid, and **today's totals**. Public reads send no credentials; only the profile request can send your optional Keychain read token in an Authorization header.
+- **The local CLI** — `tokens submit --dry-run --today`, `--week`, and `--month` (human-readable text; parsed locally, nothing submitted). This week, and today on this machine.
 
 Two things worth knowing:
 

@@ -9,6 +9,8 @@
 
 <h1 align="center">TokensBar</h1>
 
+版本变更：[CHANGELOG.md](CHANGELOG.md)。
+
 <p align="center">
   在 macOS 菜单栏上看 <a href="https://tokens.ci">tokens.ci</a> 的 token 用量和排名，不用再开网页。
 </p>
@@ -136,6 +138,16 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 图标是 `Resources/AppIcon.icns`，已经提交进仓库。它是用代码画的 —— 改 `Tools/make-icon.swift` 然后跑 `swift Tools/make-icon.swift` 重新生成。
 
+### 私密账号与数据状态
+
+私密账号可在 tokens.ci 设置里创建 **read token**，再打开 **操作与设置 → 私密账号读取令牌…**（右键菜单也有）。在安全输入框中粘贴 `tkr_…` 令牌；仅保存到 macOS 钥匙串，并按配置的用户名及 HTTPS API 地址隔离。同一对话框支持替换和移除。不要把令牌写入 `config.json`、URL、截图或问题反馈。携带令牌的个人数据请求不跟随重定向；公开榜单请求不携带令牌。
+
+“获取 HH:mm”是上次成功获取个人数据的时间，不是刷新尝试或服务端提交时间。悬停底部可查看这三类时间及本机扫描时间。失败时保留有效旧数据并解释原因。404 可能是私密账号，也可能是用户名不存在，不代表今日用量为零。主数字优先使用全部设备已提交数据；本机行与本周卡片统计此 Mac。费用均为估算（≈），不是账单。服务端每日数据以 UTC 分日。API 刷新间隔小于 60 秒会调整为 60 秒。
+
+### 离线检查
+
+安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。完整 AppKit 应用、钥匙串对话框与原生界面截图仍需在 Mac 上验收；发布前运行 `./build.sh --universal` 及现有的 `--panel-png` / `--panel-probe` 诊断。
+
 ## 配置
 
 可选，`~/.config/tokens-menubar/config.json`：
@@ -161,7 +173,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 | `menuBarRank` | `all` | 菜单栏默认显示哪个排名：`all` 累计榜 / `today` 当日榜 |
 | `menuBarItems` | `["tokens", "rank"]` | 菜单栏那行显示什么、按什么顺序 —— `tokens`、`cost`、`rank` 任意组合 |
 | `dailyCostBudget` | `0` | 今日花费超过这个值（USD）读数变琥珀、1.5 倍变红；`0` 关闭 |
-| `apiRefreshSeconds` | 300 | 拉服务端数据的间隔（最小 30） |
+| `apiRefreshSeconds` | 300 | 拉服务端数据的间隔（最小 60） |
 | `localRefreshSeconds` | 120 | 跑本地扫描的间隔（最小 30） |
 | `topModels` | 5 | 下拉里列几个模型，0 = 不列 |
 
@@ -227,8 +239,8 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 两个数据源：
 
-- **API** —— tokens.ci 的公开只读接口 `GET /api/users/<name>` 和 `GET /api/leaderboard?period=all|today`，不带任何凭据。两个排名、累计总量、模型占比、贡献图，以及**今日的总量**都来自这里
-- **本地 CLI** —— `tokens --today --json` / `tokens --week --json`，提供本周、以及本机的今日用量
+- **API** —— tokens.ci 的公开只读接口 `GET /api/users/<name>` 和 `GET /api/leaderboard?period=all|today`。公开读取不带凭据；仅个人资料请求可在 Authorization 请求头中携带可选的钥匙串读取令牌。两个排名、累计总量、模型占比、贡献图，以及**今日的总量**都来自这里
+- **本地 CLI** —— `tokens submit --dry-run --today` / `--week` / `--month`（解析纯文本，本地预览不会提交），提供本周、以及本机的今日用量
 
 两点值得知道：
 

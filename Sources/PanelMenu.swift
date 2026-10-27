@@ -44,13 +44,15 @@ final class PanelMenuView: NSView {
     var data = PanelData() { didSet { invalidate() } }
     var onAction: ((PanelAction) -> Void)?
 
-    private let pad: CGFloat = 18
+    private let pad: CGFloat = 20
     private let rowHeight: CGFloat = 30
 
     private var cache: MenuLayout?
     /// Filled by `geometry()`, so it is never out of step with the rects.
     private var rows: [MenuRow] = []
     private var hits: [(NSRect, PanelAction, String)] = []
+    private var pressedAction: PanelAction?
+    private var pressedRect: NSRect?
     private var hovered: Int?
 
     override var isFlipped: Bool { true }
@@ -84,6 +86,8 @@ final class PanelMenuView: NSView {
                            enabled: data.canSubmit && !data.busy))
         out.append(MenuRow(symbol: "arrow.clockwise", title: t("action.refresh"),
                            kind: .action(.refresh), hint: t("hint.refresh")))
+        out.append(MenuRow(symbol: "key", title: t("action.readToken"),
+                           kind: .action(.readToken), hint: t("token.hint")))
         out.append(MenuRow())
         out.append(MenuRow(symbol: "list.number", title: t("action.rankMode"),
                            kind: .pills([RankMode.allTime, .today].map {
@@ -220,6 +224,12 @@ final class PanelMenuView: NSView {
         let l = geometry()
         hits = regions(l)
         let accent = NSColor.controlAccentColor
+        defer {
+            if let rect = pressedRect {
+                fill(rect, radius: 7, colour: accent.withAlphaComponent(0.14))
+                stroke(rect, radius: 7, colour: accent.withAlphaComponent(0.35))
+            }
+        }
 
         // Pills paint their own surface, so they pick the hover colour themselves
         // rather than being washed over twice.
@@ -328,9 +338,30 @@ final class PanelMenuView: NSView {
         needsDisplay = true
     }
 
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        let hit = regions(geometry()).first { $0.0.contains(p) }
+        pressedAction = hit?.1
+        pressedRect = hit?.0
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        pressedRect = regions(geometry()).first {
+            $0.1 == pressedAction && $0.0.contains(p)
+        }?.0
+        needsDisplay = true
+    }
+
     override func mouseUp(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        guard let hit = regions(geometry()).first(where: { $0.0.contains(p) }) else { return }
+        let hit = regions(geometry()).first { $0.0.contains(p) }
+        let action = pressedAction
+        pressedAction = nil
+        pressedRect = nil
+        needsDisplay = true
+        guard let hit, hit.1 == action else { return }
         onAction?(hit.1)
     }
 

@@ -1,61 +1,57 @@
 name: Release
 
-# Tag a commit and push the tag to cut a release:
-#   git tag v1.1.0 && git push origin v1.1.0
-# Nothing to configure — GITHUB_TOKEN is provided automatically and only
-# needs contents:write to publish. Also runnable by hand from the Actions tab.
-
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to build and attach the app to
+        description: Existing version tag to build and publish (never overwrites a release)
         required: true
 
 permissions:
   contents: write
 
+concurrency:
+  group: tokensbar-release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: macos-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Resolve tag
-        id: tag
-        run: echo "name=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
-
-      # actions/checkout v7.0.1, pinned by commit so the action cannot change under us
+      - name: Validate tag
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+      # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ steps.tag.outputs.name }}
-
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Confirm release does not exist
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json
+          jq -e --arg tag "$RELEASE_TAG" 'all(.[]; .tag_name != $tag)' /tmp/releases.json
+      - name: Regression tests
+        run: bash Tests/run.sh
       - name: Build universal app
         run: ./build.sh --universal
-
+      - name: Verify bundle and tag version
+        run: bash Tools/verify-release.sh
       - name: Package
         run: |
           ditto -c -k --keepParent TokensBar.app TokensBar.app.zip
-          shasum -a 256 TokensBar.app.zip
-
-      - name: Publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.name }}
-        run: |
-          # Fixed install instructions first, then the generated changelog, so
-          # every release keeps the quarantine note without hand-editing.
+          shasum -a 256 TokensBar.app.zip > SHA256SUMS.txt
           cp .github/release-notes.md notes.md
-          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            -f tag_name="$TAG" --jq .body >> notes.md || true
-          shasum -a 256 TokensBar.app.zip | awk '{print "\n```\nSHA-256  " $1 "\n```"}' >> notes.md
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" TokensBar.app.zip --clobber
-            gh release edit "$TAG" --notes-file notes.md
-          else
-            gh release create "$TAG" \
-              --title "TokensBar $TAG" \
-              --notes-file notes.md \
-              TokensBar.app.zip
-          fi
+          printf '\n## SHA-256\n\n```text\n' >> notes.md
+          cat SHA256SUMS.txt >> notes.md
+          printf '```\n' >> notes.md
+      - name: Create complete draft release
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft \
+            --title "TokensBar $RELEASE_TAG" --notes-file notes.md \
+            TokensBar.app.zip SHA256SUMS.txt
+      - name: Publish verified release
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest

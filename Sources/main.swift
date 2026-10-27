@@ -50,7 +50,7 @@ struct Config {
         if let v = o["username"] as? String, !v.isEmpty { name = v }
         cfg.username = name
         if let v = o["apiBase"] as? String, !v.isEmpty { cfg.apiBase = v }
-        if let v = (o["apiRefreshSeconds"] as? NSNumber)?.doubleValue, v >= 30 { cfg.apiRefreshSeconds = v }
+        if let v = (o["apiRefreshSeconds"] as? NSNumber)?.doubleValue { cfg.apiRefreshSeconds = apiPollingInterval(v) }
         if let v = (o["localRefreshSeconds"] as? NSNumber)?.doubleValue, v >= 30 { cfg.localRefreshSeconds = v }
         if let v = (o["topModels"] as? NSNumber)?.intValue, v >= 0 { cfg.topModels = v }
         if let v = o["menuBarRank"] as? String, let m = RankMode(rawValue: v) { cfg.menuBarRank = m }
@@ -421,19 +421,7 @@ enum CLI {
         guard let r = run(["submit", "--dry-run"] + scopeArgs), r.status == 0,
               let text = String(data: r.out, encoding: .utf8)
         else { return nil }
-        var tokens: Int?
-        var cost = 0.0
-        for line in text.split(whereSeparator: \.isNewline)
-            .map({ $0.trimmingCharacters(in: .whitespaces) }) {
-            if line.hasPrefix("Total tokens:") {
-                // Grouped with commas, e.g. "6,941,007" — keep only the digits.
-                tokens = Int(line.filter(\.isNumber))
-            } else if line.hasPrefix("Total cost:") {
-                cost = Double(line.drop { $0 != "$" }.dropFirst()
-                    .filter { $0.isNumber || $0 == "." }) ?? 0
-            }
-        }
-        return tokens.map { ($0, cost, []) }
+        return CLIReportParser.parse(text).map { ($0.tokens, $0.cost, []) }
     }
 }
 
@@ -448,32 +436,60 @@ final class API {
         let c = URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 25
         c.timeoutIntervalForResource = 40
-        session = URLSession(configuration: c)
+        session = URLSession(configuration: c, delegate: ReadRedirectPolicy(), delegateQueue: nil)
     }
 
-    private func getJSON(_ path: String, _ done: @escaping ([String: Any]?) -> Void) {
-        guard let url = URL(string: config.apiBase + path) else { return done(nil) }
+    private func getJSON(_ path: String, authenticated: Bool = false,
+                         _ done: @escaping (Result<[String: Any], APIReadError>) -> Void) {
+        guard let url = URL(string: config.apiBase + path), url.host != nil,
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else { return done(.failure(.invalidConfiguration)) }
         var req = URLRequest(url: url)
-        req.setValue("TokensBar/1.0", forHTTPHeaderField: "User-Agent")
+        req.setValue("TokensBar/1.10", forHTTPHeaderField: "User-Agent")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        session.dataTask(with: req) { data, resp, _ in
-            guard let data, (resp as? HTTPURLResponse)?.statusCode == 200,
+        if authenticated, let token = ReadTokenStore.load(config) {
+            // ReadTokenStore only returns credentials for this HTTPS origin/user.
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        session.dataTask(with: req) { data, resp, error in
+            guard error == nil else { return done(.failure(.network)) }
+            guard let response = resp as? HTTPURLResponse else {
+                return done(.failure(.invalidResponse))
+            }
+            if let error = APIReadError.forStatus(response.statusCode) {
+                return done(.failure(error))
+            }
+            guard let data,
                   let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return done(nil) }
-            done(o)
+            else { return done(.failure(.invalidResponse)) }
+            done(.success(o))
         }.resume()
     }
 
     /// Fetches the profile plus both leaderboards (all-time and today) so either
     /// rank can be shown. Calls back on `queue` (main by default).
     func fetch(on queue: DispatchQueue = .main, _ done: @escaping (ServerStats?) -> Void) {
+        fetchResult(on: queue) { done(try? $0.get()) }
+    }
+
+    func fetchResult(on queue: DispatchQueue = .main,
+                     _ done: @escaping (Result<ServerStats, APIReadError>) -> Void) {
         let user = config.username
         guard !user.isEmpty,
-              let escaped = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-        else { return queue.async { done(nil) } }
+              let escaped = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?#")))
+        else { return queue.async { done(.failure(.invalidConfiguration)) } }
 
-        getJSON("/api/users/\(escaped)") { [weak self] o in
-            guard let self, let o else { return queue.async { done(nil) } }
+        getJSON("/api/users/\(escaped)", authenticated: true) { [weak self] result in
+            guard let self else { return }
+            let o: [String: Any]
+            switch result {
+            case .failure(let error): return queue.async { done(.failure(error)) }
+            case .success(let value): o = value
+            }
+            guard o["user"] is [String: Any], o["stats"] is [String: Any],
+                  o["contributions"] is [[String: Any]] else {
+                return queue.async { done(.failure(.invalidResponse)) }
+            }
             let u = o["user"] as? [String: Any]
             let s = o["stats"] as? [String: Any]
             let fresh = o["submissionFreshness"] as? [String: Any]
@@ -541,17 +557,18 @@ final class API {
             // `/api/users/<name>?period=today` ignores the period (it echoes
             // "all"), so a daily rank has to come from the daily board itself.
             let group = DispatchGroup()
+            let lock = NSLock()
             group.enter()
             self.findOnBoard(period: "all", username: user, fromPage: 1) {
-                stats.allTime = $0
+                lock.lock(); stats.allTime = $0; lock.unlock()
                 group.leave()
             }
             group.enter()
             self.findOnBoard(period: "today", username: user, fromPage: 1) {
-                stats.today = $0
+                lock.lock(); stats.today = $0; lock.unlock()
                 group.leave()
             }
-            group.notify(queue: queue) { done(stats) }
+            group.notify(queue: queue) { done(.success(stats)) }
         }
     }
 
@@ -560,8 +577,8 @@ final class API {
     private func findOnBoard(period: String, username: String, fromPage page: Int,
                              maxPages: Int = 6,
                              _ done: @escaping (BoardStanding?) -> Void) {
-        getJSON("/api/leaderboard?period=\(period)&limit=100&page=\(page)") { [weak self] o in
-            guard let o else { return done(nil) }
+        getJSON("/api/leaderboard?period=\(period)&limit=100&page=\(page)") { [weak self] result in
+            guard case .success(let o) = result else { return done(nil) }
             let pg = o["pagination"] as? [String: Any]
             let totalUsers = int(pg, "totalUsers")
             let users = (o["users"] as? [[String: Any]] ?? []).map {
@@ -580,7 +597,8 @@ final class API {
                 self.findOnBoard(period: period, username: username,
                                  fromPage: page + 1, maxPages: maxPages, done)
             } else {
-                // Absent from this board: rank 0 renders as 未上榜.
+                // A page cap is incomplete evidence, not proof of being unranked.
+                if hasNext { return done(nil) }
                 done(BoardStanding(rank: 0, totalUsers: totalUsers, tokens: 0, above: nil))
             }
         }
@@ -863,7 +881,10 @@ final class Controller: NSObject, NSMenuDelegate {
     /// Set from the moment the download starts until the app is replaced, so the
     /// menu item cannot start a second install over the top of the first.
     private var installing = false
-    private var lastServerFetch: Date?
+    private var lastServerAttempt: Date?
+    private var lastServerSuccess: Date?
+    private var serverLoading = false
+    private var serverError: APIReadError?
     /// Last leaderboard position seen, to announce climbs and slips.
     private var lastRank: RankSnapshot?
     /// A short-lived celebratory chip on the menu-bar readout after a rank move.
@@ -922,13 +943,25 @@ final class Controller: NSObject, NSMenuDelegate {
     // MARK: Data
 
     private func refreshServer() {
-        api.fetch { [weak self] stats in
+        guard !serverLoading else { return }
+        lastServerAttempt = Date()
+        serverLoading = true
+        render()
+        api.fetchResult { [weak self] result in
             guard let self else { return }
-            self.lastServerFetch = Date()
-            if let stats {
-                self.server = stats; self.serverFailed = false
+            self.serverLoading = false
+            switch result {
+            case .success(let stats):
+                self.server = stats
+                self.serverFailed = false
+                self.serverError = nil
+                self.lastServerSuccess = Date()
                 self.announceRankMove(stats)
-            } else { self.serverFailed = true }
+            case .failure(let error):
+                // Keep the last good server snapshot. An attempt is not success.
+                self.serverFailed = true
+                self.serverError = error
+            }
             self.render()
             if let models = self.server?.models {
                 ChartPopover.shared.update(scope: .lifetime, data: models.map(Self.datum))
@@ -1101,6 +1134,10 @@ final class Controller: NSObject, NSMenuDelegate {
         // to the footer's grey stamp line — the banner only ever appeared under
         // `--dump notice`, which sets this field by hand.
         data.noticeKind = noticeKind
+        data.serverLoading = serverLoading
+        data.serverError = serverError?.message
+        data.serverFetchedAt = lastServerSuccess
+        data.serverAttemptedAt = lastServerAttempt
         data.loginEnabled = LoginItem.isEnabled
         data.updateTitle = updateItemTitle()
         data.updateWaiting = update?.isNewer == true
@@ -1137,7 +1174,7 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         // Opening the panel is an explicit request for current numbers.
         refreshLocal()
-        if lastServerFetch.map({ Date().timeIntervalSince($0) >= 60 }) ?? true { refreshServer() }
+        if lastServerAttempt.map({ Date().timeIntervalSince($0) >= 60 }) ?? true { refreshServer() }
         DropdownPanel.shared.show(panelData, from: statusItem.button)
     }
 
@@ -1174,6 +1211,8 @@ final class Controller: NSObject, NSMenuDelegate {
             submitNow()
         case .refresh:
             refreshAll()
+        case .readToken:
+            editReadToken()
         case .setRank(let mode):
             use(rank: mode)
         case .setLanguage(let lang):
@@ -1200,7 +1239,7 @@ final class Controller: NSObject, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         // Opening the menu is an explicit request for current numbers.
         refreshLocal()
-        if let fetched = lastServerFetch, Date().timeIntervalSince(fetched) < 60 { return }
+        if let fetched = lastServerAttempt, Date().timeIntervalSince(fetched) < 60 { return }
         refreshServer()
     }
 
@@ -1272,6 +1311,10 @@ final class Controller: NSObject, NSMenuDelegate {
         for line in presenter.lines {
             if let it = item(line) { menu.addItem(it) }
         }
+        if let error = serverError { menu.addItem(disabledItem(error.message, font: rowFont, dim: true)) }
+        if let fetched = lastServerSuccess {
+            menu.addItem(disabledItem(t("stamp.fetched", fmtClock(fetched)), font: rowFont, dim: true))
+        }
         // The presenter's own trailing rule would otherwise double up with ours.
         if menu.items.last?.isSeparatorItem != true { menu.addItem(.separator()) }
         addActions()
@@ -1287,6 +1330,52 @@ final class Controller: NSObject, NSMenuDelegate {
         return it
     }
 
+    @objc private func editReadToken() {
+        DropdownPanel.shared.close()
+        guard readTokenAccount(apiBase: config.apiBase, username: config.username) != nil else {
+            let alert = NSAlert()
+            alert.messageText = t("api.configuration")
+            alert.runModal()
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = t("action.readToken")
+        alert.informativeText = t("token.explain", config.username, config.apiBase)
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 24))
+        field.placeholderString = t("token.placeholder")
+        field.setAccessibilityLabel(t("action.readToken"))
+        alert.accessoryView = field
+        alert.addButton(withTitle: t("token.save"))
+        alert.addButton(withTitle: t("token.cancel"))
+        alert.addButton(withTitle: t("token.remove"))
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = field
+        let response = alert.runModal()
+        let token = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        field.stringValue = ""
+        if response == .alertSecondButtonReturn { return }
+        let removing = response == .alertThirdButtonReturn
+        if !removing && token.isEmpty { return }
+        guard removing || (!token.isEmpty
+            && !token.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines
+                .union(.controlCharacters).contains($0) })) else {
+            let invalid = NSAlert()
+            invalid.messageText = t("token.invalid")
+            invalid.runModal()
+            return
+        }
+        // The token itself is
+        // never echoed, logged, passed to a shell, or written to UserDefaults.
+        let status = ReadTokenStore.save(removing ? nil : token, config: config)
+        if status != 0 {
+            let failure = NSAlert()
+            failure.messageText = t("token.failed")
+            failure.runModal()
+            return
+        }
+        refreshServer()
+    }
+
     private func addActions() {
         let submit = actionItem(busy ? t("action.submitting") : t("action.submit"),
                                symbol: "arrow.up.circle", action: #selector(submitNow), key: "s")
@@ -1296,6 +1385,8 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(actionItem(t("action.refresh"), symbol: "arrow.clockwise",
                                 action: #selector(refreshAll), key: "r"))
 
+        menu.addItem(actionItem(t("action.readToken"), symbol: "key",
+                                action: #selector(editReadToken)))
         menu.addItem(.separator())
         addRankModeItems()
         addLanguageItems()

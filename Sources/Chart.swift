@@ -129,20 +129,35 @@ final class ChartView: NSView {
 
     // MARK: Animation
 
-    /// Draws the chart in over ~0.4s. Called when the popover opens and when the
+    /// Draws the chart in over ~0.3s. Called when the popover opens and when the
     /// metric changes — not on a background data refresh, which would restart the
     /// animation under a reader who is mid-look.
     func animateIn() {
+        // apple-design: preserve the presentation value on interruption and
+        // provide static feedback for Reduce Motion, without ornamental bounce.
+        let startValue: CGFloat = revealTimer == nil ? 0 : reveal
         revealTimer?.invalidate()
-        reveal = 0
+        revealTimer = nil
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            reveal = 1
+            needsDisplay = true
+            return
+        }
+        reveal = startValue
         let start = Date()
-        let duration = 0.42
+        let duration = 0.32
         revealTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) {
             [weak self] timer in
             guard let self else { return timer.invalidate() }
             let t = min(1, Date().timeIntervalSince(start) / duration)
             // Ease-out cubic: quick off the mark, settles gently.
-            self.reveal = CGFloat(1 - pow(1 - t, 3))
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                self.reveal = 1
+                self.needsDisplay = true
+                timer.invalidate(); self.revealTimer = nil
+                return
+            }
+            self.reveal = startValue + (1 - startValue) * CGFloat(1 - pow(1 - t, 3))
             self.needsDisplay = true
             if t >= 1 { timer.invalidate(); self.revealTimer = nil }
         }
@@ -243,8 +258,8 @@ final class ChartView: NSView {
         let caption = hoveredSlice?.label
             ?? (metric == .cost ? t("chart.estimated") : t("chart.total"))
         let shown = hoveredSlice?.value(metric) ?? total
-        let value = metric == .tokens ? fmtTokens(Int(shown * Double(reveal)))
-                                      : fmtMoney(shown * Double(reveal))
+        let value = metric == .tokens ? fmtTokens(Int(shown))
+                                      : fmtMoney(shown)
         draw(caption, at: NSRect(x: origin.x, y: origin.y - 14, width: bounds.width - padding * 2, height: 14),
              font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .left)
         draw(value, at: NSRect(x: origin.x, y: origin.y - 34, width: bounds.width - padding * 2, height: 22),
@@ -319,8 +334,8 @@ final class ChartView: NSView {
         let caption = hoveredSlice?.label
             ?? (metric == .cost ? t("chart.estimated") : t("chart.total"))
         let shown = hoveredSlice?.value(metric) ?? total
-        let value = metric == .tokens ? fmtTokens(Int(shown * Double(reveal)))
-                                      : fmtMoney(shown * Double(reveal))
+        let value = metric == .tokens ? fmtTokens(Int(shown))
+                                      : fmtMoney(shown)
         let inner = donutRadius - ringWidth / 2
         draw(clipDisplay(caption, 20),
              at: NSRect(x: centre.x - inner, y: centre.y + 6, width: inner * 2, height: 14),
@@ -467,7 +482,7 @@ final class ChartPopover: NSObject {
         vc.view = content
         popover.contentViewController = vc
         popover.behavior = .transient
-        popover.animates = true
+        popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
     private func localise() {
