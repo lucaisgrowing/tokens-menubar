@@ -8,9 +8,9 @@ Restores the original deep-green buttons and highlights instead of inheriting th
 
 ## Build and verification / 构建与验证
 
-Universal binary (arm64 + x86_64), macOS 13+. This workflow runs the 45 pure-Swift assertions, compiles the full AppKit/Security app on macOS, and verifies both CPU slices, bundle metadata and the ad-hoc signature before publishing. These checks do not verify interactive UI, Keychain prompts, private accounts or live CLI behavior.
+Universal binary (arm64 + x86_64), macOS 13+. This workflow runs the 45 pure-Swift assertions and 10 native light/dark palette/contrast checks under a blue system-accent preference, compiles the full AppKit/Security app on macOS, and verifies both CPU slices, bundle metadata and the ad-hoc signature before publishing. These checks do not verify interactive UI, Keychain prompts, private accounts or live CLI behavior.
 
-由 macOS GitHub Actions 构建；发布前运行 45 项纯 Swift 断言、完整编译并校验双架构、包信息和 ad-hoc 签名。尚未完成真人交互、钥匙串提示、私密账号和实际 CLI 的实机验收。
+由 macOS GitHub Actions 构建；发布前运行 45 项纯 Swift 断言和 10 项原生浅深色调色／对比度检查（故意使用蓝色系统强调色）、完整编译并校验双架构、包信息和 ad-hoc 签名。尚未完成真人交互、钥匙串提示、私密账号和实际 CLI 的实机验收。
 
 ## Install / 安装
 
