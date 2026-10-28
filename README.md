@@ -114,6 +114,8 @@ The seven-day bars in the panel — or the **Active days** row in the menu — o
   <img src="docs/contributions.png" width="640" alt="A year of daily token activity as a heat grid">
 </p>
 
+The contributions screenshot reflects the current source; the month-label spacing fix is not yet in the v1.11.1 release.
+
 The toggle in the corner switches what the readout breaks the day down by — **Models**, **Clients** or **Cost**. Cost also recolours the grid: token intensity comes from the API, while the cost view derives its own levels from the quartiles of the daily spend, so a cheap-but-busy day and an expensive-but-quiet one look different.
 
 The ramp is one hue, light to dark, with separate steps for light and dark mode; days with any usage never fall back to the empty-cell colour.
