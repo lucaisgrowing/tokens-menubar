@@ -92,14 +92,14 @@ enum ClaudeBridgeInstall {
 // A poll-based reader cannot hang on a small JSON line or an inherited open pipe.
 // Responses are capped; unsolicited server requests are refused. All methods are fixed at call sites.
 enum LocalUsageRPC {
-    static func read(executable: String, arguments: [String], methods: [String], timeout: TimeInterval = 20) throws -> [[String: Any]] {
+    static func read(executable: String, arguments: [String], methods: [String], timeout: TimeInterval = 20, jsonrpc2: Bool = false) throws -> [[String: Any]] {
         let process = Process(), input = Pipe(), output = Pipe()
         process.executableURL = URL(fileURLWithPath: executable); process.arguments = arguments
         process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
         try process.run()
         defer { try? input.fileHandleForWriting.close(); if process.isRunning { process.terminate() }; try? output.fileHandleForReading.close() }
-        func send(_ o: [String: Any]) throws { var data = try JSONSerialization.data(withJSONObject: o, options: [.withoutEscapingSlashes, .sortedKeys]); data.append(10); try input.fileHandleForWriting.write(contentsOf: data) }
+        func send(_ o: [String: Any]) throws { var envelope = o; if jsonrpc2 { envelope["jsonrpc"] = "2.0" }; var data = try JSONSerialization.data(withJSONObject: envelope, options: [.withoutEscapingSlashes, .sortedKeys]); data.append(10); try input.fileHandleForWriting.write(contentsOf: data) }
         try send(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "tokensbar", "title": "TokensBar", "version": "1.12.0"]]])
         var buffer = Data(), responses: [Int: [String: Any]] = [:], total = 0
         let deadline = Date().addingTimeInterval(timeout), fd = output.fileHandleForReading.fileDescriptor
@@ -149,7 +149,7 @@ final class MuseCodeAutomatic {
         busy = true; changed?()
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let result: Result<AgentAutomaticSnapshot, Error> = Result {
-                let reply = try LocalUsageRPC.read(executable: path, arguments: ["serve"], methods: ["usage/read"])
+                let reply = try LocalUsageRPC.read(executable: path, arguments: ["serve"], methods: ["usage/read"], jsonrpc2: true)
                 guard let value = reply.first?["result"] as? [String: Any] else { throw AgentAutomaticError.unavailable }
                 return try museCodeSnapshot(value)
             }

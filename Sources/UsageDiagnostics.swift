@@ -50,7 +50,7 @@ func runNativeAutomaticChecks() throws {
     case .failure(let e): throw e
     }
     precondition(Date().timeIntervalSince(started) < 5, "small stdio frames must not wait for EOF")
-    let reply = try LocalUsageRPC.read(executable: executable.path, arguments: [], methods: ["usage/read"], timeout: 2)
+    let reply = try LocalUsageRPC.read(executable: executable.path, arguments: [], methods: ["usage/read"], timeout: 2, jsonrpc2: true)
     let muse = try museCodeSnapshot(reply[0]["result"] as! [String: Any]); precondition(muse.windows.count == 2)
     try "#!/bin/sh\nwhile IFS= read -r line; do :; done\n".write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
