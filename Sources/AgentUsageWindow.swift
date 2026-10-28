@@ -14,7 +14,7 @@ private final class AgentButton: NSButton {
 
 // The old menu-bar panel stays unchanged. This separate native window is its
 // expandable entrance for accounts, periods and providers that do not fit in a popover.
-final class AgentUsageWindow: NSObject, NSTextFieldDelegate {
+final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
     static let shared = AgentUsageWindow()
     private var window: NSWindow?
     private let store: AgentUsageStore
@@ -23,6 +23,7 @@ final class AgentUsageWindow: NSObject, NSTextFieldDelegate {
     private var search: NSSearchField?
     private var section: NSSegmentedControl?
     private var category: NSPopUpButton?
+    private var diagnostics = false
     private var dayRange = 30
     private var submitted: [AgentClientDay] = []
     private var account = ""
@@ -126,7 +127,7 @@ final class AgentUsageWindow: NSObject, NSTextFieldDelegate {
     }
     private func card(_ title: String, _ lines: [String], buttons: [AgentButton] = [], accent: Bool = false) {
         guard let body else { return }
-        let box = NSBox(); box.boxType = .custom; box.borderType = .lineBorder; box.cornerRadius = 10
+        let box = NSBox(); box.boxType = .custom; box.cornerRadius = 10
         box.fillColor = .controlBackgroundColor; box.borderColor = accent ? tokensAccent.withAlphaComponent(0.55) : .separatorColor
         box.borderWidth = 1; box.contentViewMargins = NSSize(width: 14, height: 12)
         let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 7
@@ -154,7 +155,7 @@ final class AgentUsageWindow: NSObject, NSTextFieldDelegate {
         }
         if section?.selectedSegment == 1 { catalog(); return }
         if (categoryIndex == 0 || categoryIndex == 2) && (filter.isEmpty || ("tokens.ci clients Tokens CLI " + submitted.map { $0.client }.joined(separator: " ")).localizedCaseInsensitiveContains(filter)) { clientCard() }
-        if matches(AgentCatalog.all.first { $0.id == "openrouter" }) { routerCard() }
+        if !diagnostics && matches(AgentCatalog.all.first { $0.id == "openrouter" }) { routerCard() }
         let records = store.records.filter { record in
             matches(AgentCatalog.all.first { $0.id == record.providerID }, extra: record.account + " " + record.metric + " " + record.note)
         }.sorted { $0.observedAt > $1.observedAt }
@@ -309,15 +310,16 @@ final class AgentUsageWindow: NSObject, NSTextFieldDelegate {
         sample.note = agentText("Synthetic values, not a connected account.", "虚构演示数值，不是已连接账号。")
         try store.save(sample)
         let controller = AgentUsageWindow(store: store)
+        controller.diagnostics = true
         controller.account = "demo-user"
-        controller.submitted = [AgentClientDay(date: String(ISO8601DateFormatter().string(from: now).prefix(10)), client: "Claude Code", tokens: 125000, estimatedUSD: 1.25)]
+        controller.submitted = [AgentClientDay(date: now, client: "Claude Code", tokens: 125000, estimatedUSD: 1.25)]
         controller.fetchedAt = now
         controller.makeWindow()
         guard let window = controller.window, let content = window.contentView else { throw AgentUsageError.invalidText }
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.setContentSize(NSSize(width: 900, height: 940))
         // Remove the optional router card from diagnostic content so no real saved key is read.
-        controller.filter = catalog ? "" : "Muse"
+        controller.filter = ""
         controller.search?.stringValue = controller.filter
         controller.section?.selectedSegment = catalog ? 1 : 0
         controller.rebuild()
@@ -325,7 +327,7 @@ final class AgentUsageWindow: NSObject, NSTextFieldDelegate {
         // Exercise search and category controls on the same real native view.
         controller.filter = "a-service-that-does-not-exist"; controller.rebuild()
         precondition(controller.body != nil)
-        controller.filter = catalog ? "" : "Muse"; controller.rebuild()
+        controller.filter = ""; controller.rebuild()
         content.layoutSubtreeIfNeeded()
         // Fixed content surface, no synthetic substitute drawing or post-export upscaling.
         let scale: CGFloat = 2
