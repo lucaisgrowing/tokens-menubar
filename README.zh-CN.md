@@ -23,9 +23,13 @@
 
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
-## 本地未发布：Agent 用量统一入口
+## 1.12.0 未发布候选版：Agent 用量统一入口
 
-这份源码预览新增 Agent 用量窗口：查看已提交编码活动、可选 OpenRouter 单 key 数据，手动记录/导入各服务额度与消耗，并提供 66 项服务目录。目录不是 66 个已接入服务；此功能不在 v1.11.1 下载包中，尚未完成原生 macOS 验收。详见[实现、来源与验证边界](docs/AGENT-USAGE.md)。
+原生候选版新增 Agent 用量窗口：查看已提交编码活动、可选 OpenRouter 单 key 数据，手动记录/导入各服务额度与消耗，并提供 66 项服务目录。目录不是 66 个已接入服务。macOS 双架构编译、核心测试和原生控件路径检查已通过；真实账号、Keychain 和完整人工验收尚未验证。此功能不在 v1.11.1 下载包中，未发布新 release。详见[实现、来源与验证边界](docs/AGENT-USAGE.md)。
+
+<p align="center"><img src="docs/zh/agent-usage-zh-light.png" width="450" alt="带虚构演示数据的原生 Agent 用量窗口"><img src="docs/zh/agent-catalog-zh-dark.png" width="450" alt="深色原生服务目录"></p>
+
+候选版图片由 macOS 原生 AppKit 以 2× 离屏渲染，使用虚构演示数据和固定窗口底色，不是真实已连接账号。
 
 ## 1.11.1 更新了什么
 

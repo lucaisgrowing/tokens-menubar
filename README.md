@@ -23,9 +23,13 @@
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
-## Local, unreleased Agent usage feature
+## 1.12.0 Agent usage candidate (unreleased)
 
-This source preview adds a unified Agent usage window for submitted coding activity, opt-in per-key OpenRouter data and local allowance/consumption snapshots, plus a 66-entry service catalog. It is not included in the v1.11.1 download and has not yet passed native macOS acceptance testing. See [implementation, sources and verification limits](docs/AGENT-USAGE.md).
+This native candidate adds a unified Agent usage window for submitted coding activity, opt-in per-key OpenRouter data and local allowance/consumption snapshots, plus a 66-entry service catalog (not 66 integrations). macOS universal compilation, core tests and native control-path checks pass; real-account, Keychain and complete manual acceptance remain unverified. It is not included in the v1.11.1 download and no new release has been published. See [implementation, sources and verification limits](docs/AGENT-USAGE.md).
+
+<p align="center"><img src="docs/agent-usage-en-light.png" width="450" alt="Native Agent usage window with synthetic demo values"><img src="docs/agent-catalog-en-dark.png" width="450" alt="Native researched service catalog in dark mode"></p>
+
+These candidate images are native AppKit offscreen renders at 2×, with synthetic demo data and a fixed window background, not connected account values.
 
 ## What's new in 1.11.1
 

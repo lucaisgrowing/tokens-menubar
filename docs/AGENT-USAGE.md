@@ -1,4 +1,4 @@
-# Agent usage: local, unreleased implementation
+# Agent usage: unreleased native candidate
 
 Based on TokensBar main `d4a1ff0966c49765a402e90400ab1236034715e5`; provider research checked 2026-10-28. This feature is not in the published v1.11.1 App. An isolated candidate branch is used for macOS CI; main is unchanged and no release was created. The existing main panel, typography and green accent are retained; the new entrance opens a separate native AppKit window.
 
@@ -40,8 +40,12 @@ The machine-readable catalog and all per-provider source links are in `agent-pro
 
 On macOS 13+ with Xcode Command Line Tools, the existing build command `./build.sh` includes all new Swift sources; `./build.sh --universal` creates both architectures. Run `./Tests/run.sh` for the deterministic checks.
 
-Verified in this delivery environment: 76 existing pure-Swift checks and 57 new checks pass under Swift 6.0.3 with Swift 5 language mode; frontend parsing of every `Sources/*.swift` succeeds. The new checks cover unit-safe remaining/overage/unknowns, period/reset staleness, invalid numbers, provenance spoof prevention, all-or-nothing JSON import, stable-ID upserts, local file permissions, preservation of corrupt data, OpenRouter response parsing, client-day filtering and overflow handling, and catalog invariants.
+Verified: 76 existing pure-Swift checks and 57 new checks pass on Linux and macOS; 10 native accent/contrast checks pass with the system preference set to blue. The native candidate builds with AppKit and Security for both arm64 and x86_64; bundle metadata and ad-hoc signature verification pass. The new checks cover unit-safe remaining/overage/unknowns, period/reset staleness, invalid numbers, provenance spoof prevention, all-or-nothing JSON import, stable-ID upserts, local file permissions, preservation of corrupt data, OpenRouter response parsing, client-day filtering and overflow handling, and catalog invariants.
 
-Not verified: native macOS compilation/linking, live AppKit layout or interaction, real Keychain behavior, live OpenRouter authentication/values, user device/CLI configuration. Only Linux is available to this task. No native screenshot or packaged `.app` is supplied, and syntax parsing is not advertised as a macOS build. The implementation is ready for native compilation and acceptance testing, not a verified installable release.
+The macOS diagnostic exercises five native control paths: section switching, search, empty results, API category filtering and time range updates. It also renders the actual AppKit content in English/Chinese and light/dark themes at 2× (1800×1880). Images use a temporary store and synthetic demo-user data; no real account or Keychain is accessed. These offscreen renders are not a full user-driven end-to-end acceptance test.
+
+Not verified: real Keychain behavior, live OpenRouter authentication/values, user device/CLI configuration and complete manual dialog/resize acceptance. The candidate is ad-hoc signed, not Apple-notarized, and may be blocked by Gatekeeper. No release or default-branch merge was performed.
 
 Native acceptance checklist: open the new window in light/dark modes and Chinese/English; resize/search/category-filter; add/edit/delete a snapshot; confirm a reset marks stale without fabricating data; import/export and cancel import; change tokens.ci account/failure state; optionally connect a dedicated low-limit OpenRouter key, refresh, cancel/reconnect and disconnect; confirm existing menu charts, contribution labels and actions remain intact.
+
+Native candidate CI: [run 40661469571](https://github.com/lucaisgrowing/tokens-menubar/actions/runs/40661469571), source commit `e9e528067e33e4f6e625b511b52112e6dd45bd99`. Documentation/screenshots were refreshed afterward without binary changes. The candidate branch is `wabi/agent-usage-candidate-20261028`; main remains at the base above.
