@@ -2,6 +2,15 @@ import AppKit
 import UniformTypeIdentifiers
 
 func agentText(_ en: String, _ zh: String) -> String { L10n.current == .zh ? zh : en }
+private final class AgentDocumentStack: NSStackView {
+    override var isFlipped: Bool { true }
+}
+private final class AgentBackgroundView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.setFill()
+        dirtyRect.fill()
+    }
+}
 private final class AgentButton: NSButton {
     var perform: (() -> Void)?
     convenience init(_ title: String, action: @escaping () -> Void) {
@@ -63,8 +72,7 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
                          backing: .buffered, defer: false)
         w.title = agentText("TokensBar · Agent usage", "TokensBar · Agent 用量")
         w.isReleasedWhenClosed = false; w.minSize = NSSize(width: 660, height: 520)
-        w.center(); w.contentView?.wantsLayer = true
-        w.contentView?.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        w.center(); w.contentView = AgentBackgroundView(frame: NSRect(x: 0, y: 0, width: 760, height: 660))
         let root = NSStackView(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 12
         root.translatesAutoresizingMaskIntoConstraints = false
         w.contentView?.addSubview(root)
@@ -97,7 +105,7 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         filters.addArrangedSubview(picker); picker.widthAnchor.constraint(equalToConstant: 160).isActive = true
         root.addArrangedSubview(filters); filters.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
         let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.drawsBackground = false
-        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
+        let stack = AgentDocumentStack(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false; scroll.documentView = stack
         root.addArrangedSubview(scroll); scroll.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 250).isActive = true
@@ -309,6 +317,7 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         sample.observedAt = now; sample.resetAt = sample.periodEnd
         sample.note = agentText("Synthetic values, not a connected account.", "虚构演示数值，不是已连接账号。")
         try store.save(sample)
+        NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         let controller = AgentUsageWindow(store: store)
         controller.diagnostics = true
         controller.account = "demo-user"
