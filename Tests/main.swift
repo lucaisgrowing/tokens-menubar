@@ -40,4 +40,29 @@ for language in Lang.allCases {
         expect(!error.message.hasPrefix("api."), "localized API feedback")
     }
 }
+// Month labels near a clipped opening month, across year and leap-day boundaries.
+var monthCal = Calendar(identifier: .gregorian)
+monthCal.timeZone = TimeZone(secondsFromGMT: 0)!
+let monthParser = DateFormatter()
+monthParser.calendar = monthCal
+monthParser.timeZone = monthCal.timeZone
+monthParser.locale = Locale(identifier: "en_US_POSIX")
+monthParser.dateFormat = "yyyy-MM-dd"
+for (first, expected) in [("2025-10-27", [10, 11, 12, 1]),
+                          ("2023-12-25", [12, 1, 2, 3]),
+                          ("2024-02-26", [2, 3, 4, 5]),
+                          ("2026-06-01", [6, 7, 8])] {
+    let candidates = heatmapMonthCandidates(firstMonday: monthParser.date(from: first)!, columns: 14, calendar: monthCal)
+    expect(candidates.map { monthCal.component(.month, from: $0.date) } == expected, "month boundaries \(first)")
+    let positions = candidates.map { Double($0.column * 13) }
+    for width in [18.0, 25.0, 36.0] {
+        let widths = Array(repeating: width, count: positions.count)
+        let visible = heatmapVisibleMonthIndices(positions: positions, widths: widths, rightEdge: 182)
+        expect(zip(visible, visible.dropFirst()).allSatisfy { positions[$0] + widths[$0] + 4 <= positions[$1] }, "no collision \(first) width \(width)")
+        expect(visible.allSatisfy { positions[$0] + widths[$0] <= 182 }, "no clipping \(first)")
+    }
+}
+expect(heatmapVisibleMonthIndices(positions: [0, 13, 65], widths: [25, 25, 25], rightEdge: 100) == [1, 2], "favor next month over short opening month")
+expect(heatmapVisibleMonthIndices(positions: [0], widths: [25], rightEdge: 24).isEmpty, "skip clipped final label")
+expect(heatmapVisibleMonthIndices(positions: [0], widths: [], rightEdge: 100).isEmpty, "mismatched labels rejected")
 print("PASS: \(checks) pure-Swift regression checks")

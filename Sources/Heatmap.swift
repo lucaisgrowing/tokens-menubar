@@ -222,20 +222,17 @@ final class HeatmapView: NSView {
         f.locale = displayLocale()
         f.timeZone = gridCalendar.timeZone
         f.setLocalizedDateFormatFromTemplate("MMM")
-        var lastMonth = -1
-        for col in 0..<columns {
-            guard let day = gridCalendar.date(byAdding: .day, value: col * 7,
-                                              to: firstColumnMonday) else { continue }
-            let month = gridCalendar.component(.month, from: day)
-            guard month != lastMonth else { continue }
-            lastMonth = month
-            // Only label a month once its first week is a few columns in, so the
-            // labels never collide.
-            let x = origin.x + CGFloat(col) * pitch
-            guard x < bounds.maxX - padding - 24 else { continue }
-            drawText(f.string(from: day), at: NSRect(x: x, y: origin.y + pitch + 1,
-                                                    width: 40, height: 13),
-                     font: .systemFont(ofSize: 10), colour: .secondaryLabelColor, alignment: .left)
+        let font = NSFont.systemFont(ofSize: 10)
+        let candidates = heatmapMonthCandidates(firstMonday: firstColumnMonday, columns: columns, calendar: gridCalendar)
+        let labels = candidates.map { f.string(from: $0.date) }
+        let positions = candidates.map { Double(origin.x + CGFloat($0.column) * pitch) }
+        let widths = labels.map { Double(ceil(($0 as NSString).size(withAttributes: [.font: font]).width) + 1) }
+        let visible = heatmapVisibleMonthIndices(positions: positions, widths: widths,
+                                                  rightEdge: Double(bounds.maxX - padding))
+        for index in visible {
+            drawText(labels[index], at: NSRect(x: positions[index], y: origin.y + pitch + 1,
+                                               width: widths[index], height: 13),
+                     font: font, colour: .secondaryLabelColor, alignment: .left)
         }
     }
 
