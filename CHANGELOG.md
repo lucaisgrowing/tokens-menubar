@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — local source preview
+
+- Add a native unified Agent usage entrance, separate from the existing panel, with actual tokens.ci client activity, validated local allowance/consumption snapshots, JSON import/export and an opt-in official OpenRouter per-key connector.
+- Add a 66-entry researched catalog with explicit source, account/plan boundaries and unavailable-connector labels; do not aggregate incompatible units or shared pools.
+- Preserve the existing green design, fonts, contribution-label repair and release version. Not pushed or released; Linux core tests and syntax parse passed, native macOS build/Keychain/UI/live account verification remains outstanding. See `docs/AGENT-USAGE.md`.
+
 ## 1.11.1
 
 ### Fixed

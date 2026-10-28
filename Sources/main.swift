@@ -963,6 +963,8 @@ final class Controller: NSObject, NSMenuDelegate {
                 self.serverError = error
             }
             self.render()
+            AgentUsageWindow.shared.update(server: self.server, username: self.config.username,
+                fetched: self.lastServerSuccess, failed: self.serverFailed)
             if let models = self.server?.models {
                 ChartPopover.shared.update(scope: .lifetime, data: models.map(Self.datum))
             }
@@ -1194,6 +1196,8 @@ final class Controller: NSObject, NSMenuDelegate {
         case .menuPage, .back:
             // The panel turns its own pages; the controller only hears the verbs.
             break
+        case .agentUsage:
+            openAgentUsage()
         case .profile:
             openProfile()
         case .history:
@@ -1384,6 +1388,9 @@ final class Controller: NSObject, NSMenuDelegate {
 
         menu.addItem(actionItem(t("action.refresh"), symbol: "arrow.clockwise",
                                 action: #selector(refreshAll), key: "r"))
+
+        menu.addItem(actionItem(agentText("Agent usage", "Agent 用量"), symbol: "square.grid.2x2",
+                                action: #selector(openAgentUsage), key: "a"))
 
         menu.addItem(actionItem(t("action.readToken"), symbol: "key",
                                 action: #selector(editReadToken)))
@@ -1618,6 +1625,12 @@ final class Controller: NSObject, NSMenuDelegate {
             ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
                                      from: statusItem.button)
         }
+    }
+
+    @objc private func openAgentUsage() {
+        DropdownPanel.shared.close()
+        AgentUsageWindow.shared.show(server: server, username: config.username,
+            fetched: lastServerSuccess, failed: serverFailed) { [weak self] in self?.refreshAll() }
     }
 
     @objc private func openProfile() {
@@ -2008,6 +2021,14 @@ if CommandLine.arguments.contains("--submit") {
     if let line = CLI.firstLine(r.out) { print("stdout: \(line)") }
     if let line = CLI.firstLine(r.err) { print("stderr: \(line)") }
     exit(r.status == 0 ? 0 : 1)
+}
+if let i = CommandLine.arguments.firstIndex(of: "--agent-diagnostics"), CommandLine.arguments.count > i + 1 {
+    _ = NSApplication.shared
+    applyLanguage(Config())
+    do {
+        try AgentUsageWindow.renderDiagnostics(to: CommandLine.arguments[i + 1], dark: CommandLine.arguments.contains("dark"), catalog: CommandLine.arguments.contains("catalog"))
+        exit(0)
+    } catch { fputs("Agent diagnostics failed: \(error)\n", stderr); exit(1) }
 }
 if let i = CommandLine.arguments.firstIndex(of: "--chart-png"),
    CommandLine.arguments.count > i + 1 {

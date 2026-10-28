@@ -14,6 +14,7 @@ enum PanelAction: Equatable {
     case menuPage
     case back
     case history
+    case agentUsage
     case chart(ChartScope)
     case submit
     case refresh
@@ -37,6 +38,7 @@ extension PanelAction: CustomStringConvertible {
         case .menuPage: return "menu"
         case .back: return "back"
         case .history: return "contributions"
+        case .agentUsage: return "agent-usage"
         case .chart(let scope): return scope == .today ? "chart(today)" : "chart(lifetime)"
         case .submit: return "submit"
         case .refresh: return "refresh"

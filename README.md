@@ -23,6 +23,10 @@
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
+## Local, unreleased Agent usage feature
+
+This source preview adds a unified Agent usage window for submitted coding activity, opt-in per-key OpenRouter data and local allowance/consumption snapshots, plus a 66-entry service catalog. It is not included in the v1.11.1 download and has not yet passed native macOS acceptance testing. See [implementation, sources and verification limits](docs/AGENT-USAGE.md).
+
 ## What's new in 1.11.1
 
 - Restore the original deep-green buttons and highlights, independent of the macOS system accent color; preserve light/dark styling, with more legible small green text in dark mode.

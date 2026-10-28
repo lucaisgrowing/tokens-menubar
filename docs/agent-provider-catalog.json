@@ -1,0 +1,667 @@
+{
+  "checkedOn": "2026-10-28",
+  "upstreamRevision": "c2f3857c328478e2599a3ba871151ec255e00831",
+  "catalogNotConnections": true,
+  "providers": [
+    {
+      "id": "muse",
+      "name": "Meta Muse",
+      "category": "personal",
+      "unit": "Muse tokens",
+      "documentation": "https://www.meta.com/help/subscriptions/1021145227643680/",
+      "noteEN": "Weekly Muse allowance; not generic model tokens. No public personal quota API verified. Manual entries only.",
+      "noteZH": "每周 Muse 额度，不等同于通用模型 token；未确认公开个人额度 API。当前支持手动记录。",
+      "upstreamClient": false
+    },
+    {
+      "id": "grok-bot",
+      "name": "Grok Bot",
+      "category": "personal",
+      "unit": "service-reported units",
+      "documentation": "https://docs.x.ai/grok-bot/faq",
+      "noteEN": "New X plans share a weekly pool with Cursor and Grok; legacy plans differ. No personal quota API verified. Not Grok Build.",
+      "noteZH": "新 X 套餐与 Cursor、Grok 共用周额度；旧套餐口径不同。未确认个人额度 API；不是 Grok Build。",
+      "upstreamClient": false
+    },
+    {
+      "id": "cue",
+      "name": "Manus Cue",
+      "category": "personal",
+      "unit": "service-reported units",
+      "documentation": "https://help.manus.im/en/articles/11711111-what-is-the-current-membership-pricing-for-manus",
+      "noteEN": "Cue phone usage has a separate weekly allowance, not Manus credits. Personal quota API coverage unverified.",
+      "noteZH": "Cue 电话用量使用独立周额度，不消耗 Manus credits；个人额度 API 覆盖范围未确认。",
+      "upstreamClient": false
+    },
+    {
+      "id": "wabi",
+      "name": "Wabi",
+      "category": "personal",
+      "unit": "service-reported units",
+      "documentation": "https://wabi.ai/terms",
+      "noteEN": "No public personal usage API verified. No web scraping or login-cookie reuse. Manual records do not imply a known quota.",
+      "noteZH": "未确认公开个人用量 API；不抓网页或复用登录 cookie。手动记录不表示已知 Wabi 有固定额度。",
+      "upstreamClient": false
+    },
+    {
+      "id": "chatgpt",
+      "name": "ChatGPT / Work",
+      "category": "personal",
+      "unit": "credits",
+      "documentation": "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
+      "noteEN": "Plan-specific Work/Codex shared pools and regular Chat limits differ. API billing is separate. Record the exact dashboard unit and pool.",
+      "noteZH": "Work/Codex 依套餐共用额度，常规 Chat 限额不同；API 另行计费。请记录官方页面实际单位与共享池。",
+      "upstreamClient": false
+    },
+    {
+      "id": "claude-app",
+      "name": "Claude",
+      "category": "personal",
+      "unit": "service-reported units",
+      "documentation": "https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work",
+      "noteEN": "Claude app and Claude Code share plan usage; session and weekly windows differ. API billing is separate. No personal quota adapter in this build.",
+      "noteZH": "Claude 与 Claude Code 共用套餐用量；会话与每周窗口不同，API 另行计费。当前未接个人额度接口。",
+      "upstreamClient": false
+    },
+    {
+      "id": "gemini-app",
+      "name": "Gemini",
+      "category": "personal",
+      "unit": "service-reported units",
+      "documentation": "https://support.google.com/gemini/answer/16275805?hl=en",
+      "noteEN": "Compute-based app limits and reset windows are plan-dependent. Gemini API project quotas are separate. Manual entries only.",
+      "noteZH": "应用采用计算用量限制，重置依套餐；Gemini API 项目配额是另一套数据。当前支持手动记录。",
+      "upstreamClient": false
+    },
+    {
+      "id": "manus",
+      "name": "Manus",
+      "category": "personal",
+      "unit": "Manus credits",
+      "documentation": "https://open.manus.im/docs/v2/authentication",
+      "noteEN": "Usage/credit APIs exist, but personal API keys grant full account access and standard OAuth cannot read all usage endpoints. Not connected; Cue allowance is separate.",
+      "noteZH": "有用量/积分接口，但个人 API key 拥有完整账户权限，普通 OAuth 无法读取全部用量端点。尚未接入；Cue 额度另计。",
+      "upstreamClient": false
+    },
+    {
+      "id": "replit",
+      "name": "Replit Agent",
+      "category": "personal",
+      "unit": "USD credits",
+      "documentation": "https://docs.replit.com/billing/ai-billing",
+      "noteEN": "Credits can cover Agent and cloud services; dashboard may lag by 30 minutes. Separate Free Mode allowance from paid usage. Manual entries only.",
+      "noteZH": "积分可覆盖 Agent 与云服务；面板可能延迟 30 分钟。免费模式额度与付费用量分开记录。当前手动。",
+      "upstreamClient": false
+    },
+    {
+      "id": "lovable",
+      "name": "Lovable",
+      "category": "personal",
+      "unit": "Lovable credits",
+      "documentation": "https://docs.lovable.dev/introduction/credits-and-usage",
+      "noteEN": "Build/chat and run usage can draw from one balance. Daily grants and monthly credits differ. Do not sum shared balances. Manual entries only.",
+      "noteZH": "构建/聊天与运行可共用一个余额；每日赠额和月度积分不同，不重复累加共享余额。当前手动。",
+      "upstreamClient": false
+    },
+    {
+      "id": "genspark",
+      "name": "Genspark / GenCode",
+      "category": "personal",
+      "unit": "Genspark credits",
+      "documentation": "https://www.genspark.ai/helpcenter/credits-guide",
+      "noteEN": "Weekly Free Quota and billing-cycle credits are separate; credit history can lag for hours. Some chat/image limits are separate. GenCode uses Genspark credits, not the Standard-agent free pool. No quota connector verified.",
+      "noteZH": "每周 Free Quota 与账期 credits 分开，历史可延迟数小时；部分聊天/图像另有限额。GenCode 使用 Genspark credits，不使用 Standard Agent 免费池。未确认额度接口。",
+      "upstreamClient": false
+    },
+    {
+      "id": "lindy",
+      "name": "Lindy",
+      "category": "personal",
+      "unit": "Lindy credits",
+      "documentation": "https://docs.lindy.ai/account-billing/usage",
+      "noteEN": "One workspace credit pool spans teammates and agents. Monthly plan credits reset with the billing cycle; purchased top-ups remain. Individual caps are not extra pools. Manual/import only.",
+      "noteZH": "团队成员与 Agent 共用工作区积分池；月套餐积分按账期重置，购买的补充积分保留。个人上限不是额外池。当前手动/导入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "m365-copilot",
+      "name": "Microsoft 365 Copilot",
+      "category": "personal",
+      "unit": "service-reported units",
+      "documentation": "https://support.microsoft.com/en-us/microsoft-365-copilot/ai-credits-and-limits-for-microsoft-365-subscriptions",
+      "noteEN": "Credits and feature-specific usage limits vary by plan and entry point. Consumer benefits belong to the subscription owner, not all Family members. No personal quota connector verified.",
+      "noteZH": "Credits 与功能限额依套餐和入口不同；个人订阅 AI 权益仅属于订阅所有者，不自动共享给 Family 成员。未确认个人额度接口。",
+      "upstreamClient": false
+    },
+    {
+      "id": "notion-agent",
+      "name": "Notion Agent / Custom Agents",
+      "category": "personal",
+      "unit": "Notion credits",
+      "documentation": "https://www.notion.com/help/manage-your-ai-credits",
+      "noteEN": "Standard, Select and workspace Notion credits are separate pools. Agents can draw from a workspace pool depending on admin policy; record exact workspace, unit and reset. Manual/import only.",
+      "noteZH": "Standard、Select 与工作区 Notion credits 分为不同池；Agent 依管理员策略使用工作区额度，记录具体工作区、单位与重置。当前手动/导入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "perplexity-computer",
+      "name": "Perplexity Computer / Comet",
+      "category": "personal",
+      "unit": "credits",
+      "documentation": "https://www.perplexity.ai/help-center/en/articles/13838041-how-credits-work-on-perplexity",
+      "noteEN": "Computer has plan-dependent weekly included usage and separate credits. Comet Work mode uses Computer; Search does not. Weekly and billing-cycle resets differ. No personal quota connector verified.",
+      "noteZH": "Computer 的每周包含用量与 credits 分开；Comet Work 使用 Computer，Search 不消耗 credits。周重置与账期不同，未确认个人额度接口。",
+      "upstreamClient": false
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity API",
+      "category": "api",
+      "unit": "USD",
+      "documentation": "https://docs.perplexity.ai/docs/resources/faq",
+      "noteEN": "API Console usage is separate from consumer subscription allowances. Model tokens and tool/session fees differ. Not connected.",
+      "noteZH": "API Console 用量不能当成消费者订阅额度；模型 token、工具和会话费用不同。尚未接入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "openhands",
+      "name": "OpenHands",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://docs.openhands.dev/openhands/usage/llms/llms",
+      "noteEN": "Uses the configured model provider; token/spend records can overlap the provider bill. Cloud and self-hosted compute are distinct. Manual/import only.",
+      "noteZH": "使用所配置的模型供应商；token/费用可能与供应商账单重叠，云端与自托管计算分开。当前手动/文件导入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter API key",
+      "category": "api",
+      "unit": "USD",
+      "documentation": "https://openrouter.ai/docs/api_reference/limits.md",
+      "noteEN": "Optional documented GET /api/v1/key connector. Shows this key’s spend/cap, NOT account balance. No management key requested; key may still authorize model calls elsewhere.",
+      "noteZH": "可选官方 GET /api/v1/key 查询此 key 的费用/上限，不是账户余额。不要求管理密钥；此 key 在其他地方仍可能用于付费调用。",
+      "upstreamClient": false
+    },
+    {
+      "id": "openai-api",
+      "name": "OpenAI API",
+      "category": "api",
+      "unit": "USD",
+      "documentation": "https://platform.openai.com/docs/api-reference/administration",
+      "noteEN": "Organization administration endpoints need admin credentials. API usage is separate from ChatGPT/Codex plan pools. Not connected.",
+      "noteZH": "组织管理接口需要管理凭据；API 用量不同于 ChatGPT/Codex 套餐额度。尚未接入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "anthropic-api",
+      "name": "Claude API",
+      "category": "api",
+      "unit": "USD",
+      "documentation": "https://platform.claude.com/docs/en/manage-claude/usage-cost-api.md",
+      "noteEN": "Organization Usage/Cost Admin API is not available to individual accounts; platform-specific restrictions apply. Not Claude subscription usage. Not connected.",
+      "noteZH": "组织 Usage/Cost Admin API 不适用于个人账户，且受平台限制；不是 Claude 订阅用量。尚未接入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "gemini-api",
+      "name": "Gemini API",
+      "category": "api",
+      "unit": "tokens",
+      "documentation": "https://ai.google.dev/gemini-api/docs/rate-limits?hl=en",
+      "noteEN": "RPM/TPM/RPD quotas are project-scoped, not per key. Daily RPD resets at Pacific midnight. Separate from Gemini app limits. Not connected.",
+      "noteZH": "RPM/TPM/RPD 按项目而非 key 计；每日 RPD 在太平洋时间午夜重置。不同于 Gemini 应用额度。尚未接入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "xai-api",
+      "name": "xAI API",
+      "category": "api",
+      "unit": "USD",
+      "documentation": "https://docs.x.ai/developers/rest-api-reference/management/billing",
+      "noteEN": "Developer API billing is not Grok app or Grok Bot subscription allowance. Management access requires separate review; not connected.",
+      "noteZH": "开发者 API 账单不是 Grok 应用或 Grok Bot 订阅额度。管理权限需另行评估，尚未接入。",
+      "upstreamClient": false
+    },
+    {
+      "id": "client-amp",
+      "name": "Amp",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-antigravity",
+      "name": "Antigravity",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Upstream requires its explicit sync step first.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 上游要求先执行对应 sync。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-antigravity-cli",
+      "name": "Antigravity CLI",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-claude-code",
+      "name": "Claude Code",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Claude subscription pool is shared with Claude app; API mode differs.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 Claude 订阅额度与应用共用；API 登录另计。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-cline",
+      "name": "Cline",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-codebuddy",
+      "name": "CodeBuddy",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-codebuff",
+      "name": "Codebuff",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-codex-cli",
+      "name": "Codex CLI",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Plan allowance may be shared with Work; local token logs are not remaining credits.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 套餐额度可能与 Work 共用；本机 token 日志不是剩余额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-command-code",
+      "name": "Command Code",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-copilot",
+      "name": "Copilot",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Current AI credits and legacy premium requests have different units.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 现行 AI credits 与旧版 premium requests 单位不同。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-crush",
+      "name": "Crush",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-cursor",
+      "name": "Cursor",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Upstream requires its explicit sync step first.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 上游要求先执行对应 sync。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-devin-cli",
+      "name": "Devin CLI",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-devin-desktop",
+      "name": "Devin Desktop",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-droid",
+      "name": "Droid",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-fx",
+      "name": "Fx",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-gajae-code",
+      "name": "Gajae Code",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-gemini-cli",
+      "name": "Gemini CLI",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-goose",
+      "name": "Goose",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-grok-build",
+      "name": "Grok Build",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Distinct from Grok Bot.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 与 Grok Bot 不同。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-hermes-agent",
+      "name": "Hermes Agent",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-jcode",
+      "name": "Jcode",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-junie",
+      "name": "Junie",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-kilo",
+      "name": "Kilo",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-kilo-cli",
+      "name": "Kilo CLI",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-kimi",
+      "name": "Kimi",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-kiro",
+      "name": "Kiro",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-mimo-code",
+      "name": "MiMo Code",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-mux",
+      "name": "Mux",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-openclaw",
+      "name": "OpenClaw",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-opencode",
+      "name": "OpenCode",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-opencodereview",
+      "name": "OpenCodeReview",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-orca",
+      "name": "Orca",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-pi",
+      "name": "Pi",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-qwen",
+      "name": "Qwen",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-reasonix",
+      "name": "Reasonix",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-roo-code",
+      "name": "Roo Code",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-paseo",
+      "name": "Paseo",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Paseo uses underlying Claude Code/Codex sources. Its activity is not a second meter. No independent submitted total or quota connector.",
+      "noteZH": "Paseo 使用底层 Claude Code/Codex 数据，不是另一份用量；不重复统计，也未接独立额度接口。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-trae",
+      "name": "Trae",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Upstream requires its explicit sync step first.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 上游要求先执行对应 sync。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-warp",
+      "name": "Warp",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Upstream requires its explicit sync step first.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 上游要求先执行对应 sync。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-workbuddy",
+      "name": "WorkBuddy",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-zcode",
+      "name": "ZCode",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "client-zed-agent",
+      "name": "Zed Agent",
+      "category": "coding",
+      "unit": "tokens",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。",
+      "upstreamClient": true
+    },
+    {
+      "id": "custom",
+      "name": "Other / 自定义",
+      "category": "custom",
+      "unit": "credits",
+      "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
+      "noteEN": "Create a manual record for another service. Use its actual unit; do not enter keys, passwords or cookies.",
+      "noteZH": "可为其他服务添加手动记录，保留其真实单位；不要输入 key、密码或 cookie。",
+      "upstreamClient": false
+    }
+  ]
+}

@@ -27,6 +27,14 @@ jobs:
         run: bash Tools/verify-release.sh
       - name: Render native candidate views
         run: bash Tools/render-readme-snapshots.sh "$PWD/TokensBar.app" candidate-snapshots
+      - name: Render native Agent usage candidate
+        run: |
+          mkdir -p candidate-snapshots/agents
+          for lang in en zh; do
+            ./TokensBar.app/Contents/MacOS/TokensBar --agent-diagnostics candidate-snapshots/agents --lang "$lang"
+            ./TokensBar.app/Contents/MacOS/TokensBar --agent-diagnostics candidate-snapshots/agents dark catalog --lang "$lang"
+          done
+          sips -g pixelWidth -g pixelHeight candidate-snapshots/agents/*.png
       - name: Package
         run: |
           ditto -c -k --keepParent TokensBar.app TokensBar.app.zip
