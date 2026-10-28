@@ -37,13 +37,13 @@ The following improvements from 1.11.0 are retained:
 
 [Download v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [Full changelog](CHANGELOG.md)
 
-The README images below are native AppKit offscreen renders of the published **1.11.1** app on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
+The README images below are 2× native AppKit offscreen renders of a **1.11.1** source build on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The snapshot-only change increases render resolution without changing the app interface. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
 
 > **Apple silicon:** use a native **arm64** `tokens` CLI, installed through Apple silicon Homebrew (`brew install owo-network/brew/tokens`). An Intel-only CLI needs Rosetta to run; TokensBar prefers a native installation when available and reports an unlaunchable CLI rather than a bare "submit failed".
 
 <p align="center">
-  <img src="docs/menu.png" width="380" alt="The TokensBar dropdown panel in light mode">
-  <img src="docs/menu-dark.png" width="380" alt="The TokensBar dropdown panel in dark mode">
+  <img src="docs/menu.png" width="360" alt="The TokensBar dropdown panel in light mode">
+  <img src="docs/menu-dark.png" width="360" alt="The TokensBar dropdown panel in dark mode">
 </p>
 
 ```
@@ -84,8 +84,8 @@ open are a single click from the menu bar, and the rank and language choices are
 indented rows under a heading rather than submenus.
 
 <p align="center">
-  <img src="docs/panel-actions.png" width="380" alt="The actions page inside the panel, light mode">
-  <img src="docs/panel-actions-dark.png" width="380" alt="The actions page inside the panel, dark mode">
+  <img src="docs/panel-actions.png" width="360" alt="The actions page inside the panel, light mode">
+  <img src="docs/panel-actions-dark.png" width="360" alt="The actions page inside the panel, dark mode">
 </p>
 
 ## Model distribution

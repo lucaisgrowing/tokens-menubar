@@ -37,13 +37,13 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 [下载 v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [完整更新日志](CHANGELOG.md)
 
-下方图片由已发布的 **1.11.1** App 在 macOS 上通过原生 AppKit 离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
+下方图片由 **1.11.1** 源码构建的 App 在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。此次仅修改诊断截图的分辨率，不改变应用界面。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
 
 > **Apple silicon：** 建议用 Apple 芯片版 Homebrew 安装原生 **arm64** `tokens` CLI（`brew install owo-network/brew/tokens`）。仅支持 Intel 的 CLI 需要 Rosetta 才能运行；TokensBar 优先选择可用的原生安装，无法启动时会显示原因，而不是只说「提交失败」。
 
 <p align="center">
-  <img src="docs/zh/menu.png" width="380" alt="TokensBar 下拉面板（浅色）">
-  <img src="docs/zh/menu-dark.png" width="380" alt="TokensBar 下拉面板（深色）">
+  <img src="docs/zh/menu.png" width="360" alt="TokensBar 下拉面板（浅色）">
+  <img src="docs/zh/menu-dark.png" width="360" alt="TokensBar 下拉面板（深色）">
 </p>
 
 ```
@@ -75,8 +75,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 一次点击；排名和语言的选项改成标题下面的缩进行，不再做成子菜单。
 
 <p align="center">
-  <img src="docs/zh/panel-actions.png" width="380" alt="面板里的操作页（浅色）">
-  <img src="docs/zh/panel-actions-dark.png" width="380" alt="面板里的操作页（深色）">
+  <img src="docs/zh/panel-actions.png" width="360" alt="面板里的操作页（浅色）">
+  <img src="docs/zh/panel-actions-dark.png" width="360" alt="面板里的操作页（深色）">
 </p>
 
 ## 模型分布饼图
