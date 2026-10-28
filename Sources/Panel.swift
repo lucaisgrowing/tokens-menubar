@@ -1401,7 +1401,17 @@ final class DropdownPanel: NSObject {
         view.layoutSubtreeIfNeeded()
         view.display()
 
-        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+        // Use a 2x backing bitmap, retaining the original point-size layout.
+        // This renders the actual native view rather than enlarging a 1x image.
+        let scale: CGFloat = 2
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                         pixelsWide: Int(ceil(view.bounds.width * scale)),
+                                         pixelsHigh: Int(ceil(view.bounds.height * scale)),
+                                         bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = view.bounds.size
         view.cacheDisplay(in: view.bounds, to: rep)
         view.layer?.backgroundColor = nil
         host.contentView = nil // hand the view back to the popover
