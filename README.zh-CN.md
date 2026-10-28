@@ -163,7 +163,7 @@ cd tokens-menubar
 open TokensBar.app
 ```
 
-app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
+app 是 `LSUIElement`，不显示 Dock 图标。菜单栏面板仍是主入口；「Agent 用量」和「用量与显示」会打开原生工具窗口。
 
 图标是 `Resources/AppIcon.icns`，已经提交进仓库。它是用代码画的 —— 改 `Tools/make-icon.swift` 然后跑 `swift Tools/make-icon.swift` 重新生成。
 
