@@ -14,6 +14,7 @@ enum PanelAction: Equatable {
     case menuPage
     case back
     case history
+    case preferences
     case agentUsage
     case chart(ChartScope)
     case submit
@@ -38,6 +39,7 @@ extension PanelAction: CustomStringConvertible {
         case .menuPage: return "menu"
         case .back: return "back"
         case .history: return "contributions"
+        case .preferences: return "preferences"
         case .agentUsage: return "agent-usage"
         case .chart(let scope): return scope == .today ? "chart(today)" : "chart(lifetime)"
         case .submit: return "submit"
@@ -90,6 +92,7 @@ struct PanelData {
     /// Trailing seven days, oldest first, gaps filled with zeroes.
     var recent: [ContribDay] = []
     /// Mean daily tokens over the seven days before today.
+    var comparison: UsageComparison?
     var avgTokens = 0.0
     var bestTokens = 0
     /// Today's per-model split, already folded to the chart's slices.
@@ -162,10 +165,15 @@ extension PanelData {
 
         let all = server?.contribs ?? []
         recent = PanelData.trailing(all, days: 7)
-        // The baseline today is compared against: the seven days before it.
-        let before = PanelData.trailing(all, days: 8).dropLast()
-        avgTokens = before.isEmpty ? 0
-            : Double(before.reduce(0) { $0 + $1.tokens }) / Double(before.count)
+        // Strict same-source baseline: a missing day is unknown, not zero.
+        let today = gridCalendar.startOfDay(for: Date())
+        let keys = (1...7).compactMap { gridCalendar.date(byAdding: .day, value: -$0, to: today) }.map { dayFormatter.string(from: $0) }
+        func input(_ day: ContribDay) -> UsageDayInput {
+            UsageDayInput(key: dayFormatter.string(from: day.date), tokens: day.tokens,
+                models: Dictionary(day.models.map { ($0.name, $0.tokens) }, uniquingKeysWith: +))
+        }
+        comparison = usageComparison(today: server?.todayDay.map(input), previous: all.map(input), expectedKeys: keys)
+        avgTokens = comparison?.mean ?? 0
         bestTokens = all.map(\.tokens).max() ?? 0
         models = todayChartModels(local, server).map {
             ChartDatum(label: $0.model, tokens: $0.tokens, cost: $0.cost)
@@ -773,8 +781,7 @@ final class PanelView: NSView {
              colour: .secondaryLabelColor)
         let value: String
         if avg <= 0 { value = "—" }
-        else if ratio >= 1 { value = t("panel.avgMultiple", String(format: "%.1f", ratio)) }
-        else { value = t("panel.avgPercent", Int((ratio * 100).rounded())) }
+        else { value = String(format: "%+.1f%%", (ratio - 1) * 100) }
         text(value, in: l.avgValue,
              font: .monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
              colour: ratio >= 1 ? tokensAccentInk : .secondaryLabelColor, align: .right)
@@ -785,7 +792,7 @@ final class PanelView: NSView {
                         width: 1, height: l.avgTrack.height + 4),
                  radius: 0, colour: .tertiaryLabelColor)
         }
-        text(avg > 0 ? t("panel.avgBest", fmtTokens(Int(avg.rounded())), fmtTokens(data.bestTokens))
+        text(avg > 0 ? agentText("UTC · daily mean ", "UTC · 日均 ") + fmtTokens(Int(avg.rounded())) + agentText(" · today incomplete", " · 今日未结束")
                        : t("panel.avgUnavailable"),
              in: l.avgSub, font: smallFont, colour: .secondaryLabelColor)
     }
@@ -1004,7 +1011,7 @@ final class PanelView: NSView {
         let sources = t("panel.sourceDetail")
         tooltip(l.hero, sources)
         tooltip(l.boardTrack.union(l.boardLabel), t("panel.rankDetail"))
-        tooltip(l.avgTrack.union(l.avgSub), t("panel.avgDetail"))
+        tooltip(l.avgTrack.union(l.avgSub), agentText("Previous 7 complete UTC records vs submitted today (in progress). Missing days are unknown. Trends, display & alerts has model details when supported.", "前 7 个完整 UTC 日记录与今日已提交数据比较；今日未结束，缺失不算零。「趋势、显示与提醒」可查看有依据的模型明细。"))
         var status: [String] = []
         if let error = data.serverError { status.append(error) }
         if let d = data.serverAttemptedAt { status.append(t("stamp.attempted", fmtClock(d))) }

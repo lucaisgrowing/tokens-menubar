@@ -23,6 +23,8 @@ jobs:
         run: bash Tests/accent.sh
       - name: Build universal app
         run: ./build.sh --universal
+      - name: Native automatic connector and settings tests
+        run: ./TokensBar.app/Contents/MacOS/TokensBar --automatic-checks
       - name: Verify bundle
         run: bash Tools/verify-release.sh
       - name: Render native candidate views
@@ -33,6 +35,10 @@ jobs:
           for lang in en zh; do
             ./TokensBar.app/Contents/MacOS/TokensBar --agent-diagnostics candidate-snapshots/agents --lang "$lang"
             ./TokensBar.app/Contents/MacOS/TokensBar --agent-diagnostics candidate-snapshots/agents dark catalog --lang "$lang"
+            ./TokensBar.app/Contents/MacOS/TokensBar --agent-diagnostics candidate-snapshots/agents automatic --lang "$lang"
+            ./TokensBar.app/Contents/MacOS/TokensBar --agent-diagnostics candidate-snapshots/agents automatic dark --lang "$lang"
+            ./TokensBar.app/Contents/MacOS/TokensBar --preferences-diagnostics candidate-snapshots/preferences --lang "$lang"
+            ./TokensBar.app/Contents/MacOS/TokensBar --preferences-diagnostics candidate-snapshots/preferences dark --lang "$lang"
           done
           sips -g pixelWidth -g pixelHeight candidate-snapshots/agents/*.png
       - name: Package

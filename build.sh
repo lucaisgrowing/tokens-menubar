@@ -29,6 +29,7 @@ compile() { # $1 = arch, $2 = output path
     -target "$1-apple-macos$DEPLOY_TARGET" \
     -framework AppKit \
     -framework Security \
+    -framework UserNotifications \
     -o "$2" "$DIR"/Sources/*.swift
 }
 

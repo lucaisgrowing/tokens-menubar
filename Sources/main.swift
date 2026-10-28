@@ -258,6 +258,8 @@ struct LocalStats {
     var todayModels: [ModelSlice] = []
     var updatedAt: Date?
     var failed = false
+    var monthFailed = false
+    var monthUpdatedAt: Date?
 }
 
 /// Today's slices for the donut chart: the server's all-device split, so the
@@ -713,7 +715,7 @@ struct Presenter {
                 if let d = serverToday { parts.append(fmtTokens(d.tokens)) }
                 else { parts.append(local.failed ? "—" : fmtTokens(local.todayTokens)) }
             case "cost":
-                parts.append(local.failed && serverToday == nil ? "—" : fmtMoney(todayCost))
+                parts.append(local.failed && serverToday == nil ? "—" : "≈" + fmtMoney(todayCost))
             case "rank":
                 if let st = server?.standing(rankMode) {
                     parts.append(st.rank > 0 ? "\(rankMode.badge)\(st.rank)" : "\(rankMode.badge)—")
@@ -858,7 +860,7 @@ struct Presenter {
 // MARK: - Controller
 
 final class Controller: NSObject, NSMenuDelegate {
-    private let config = Config.load()
+    private var config = Config.load()
     private lazy var api = API(config: config)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
@@ -881,6 +883,7 @@ final class Controller: NSObject, NSMenuDelegate {
     /// Set from the moment the download starts until the app is replaced, so the
     /// menu item cannot start a second install over the top of the first.
     private var installing = false
+    private var lastLocalAttempt: Date?
     private var lastServerAttempt: Date?
     private var lastServerSuccess: Date?
     private var serverLoading = false
@@ -904,6 +907,8 @@ final class Controller: NSObject, NSMenuDelegate {
 
     override init() {
         super.init()
+        if let items = UserDefaults.standard.stringArray(forKey: "display.menuItems"), !validMenuItems(items).isEmpty { config.menuBarItems = validMenuItems(items) }
+        if UserDefaults.standard.object(forKey: "cost.dailyThreshold") != nil { config.dailyCostBudget = max(0, UserDefaults.standard.double(forKey: "cost.dailyThreshold")) }
         let storedRank = UserDefaults.standard.string(forKey: Controller.rankModeKey)
         rankMode = storedRank.flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
         let storedLang = UserDefaults.standard.string(forKey: Controller.languageKey)
@@ -923,6 +928,15 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         menu.delegate = self
         DropdownPanel.shared.onAction = { [weak self] action in self?.handle(action) }
+        UsagePreferencesWindow.shared.onChange = { [weak self] items, daily in
+            guard let self else { return }
+            self.config.menuBarItems = items; self.config.dailyCostBudget = daily
+            UserDefaults.standard.set(items, forKey: "display.menuItems"); UserDefaults.standard.set(daily, forKey: "cost.dailyThreshold")
+            self.render()
+        }
+        UsagePreferencesWindow.shared.onRefresh = { [weak self] in self?.refreshAll() }
+        UsagePreferencesWindow.shared.onSubmit = { [weak self] in self?.submitNow() }
+        UsagePreferencesWindow.shared.onReadToken = { [weak self] in self?.editReadToken() }
         render()
 
         refreshLocal()
@@ -963,6 +977,7 @@ final class Controller: NSObject, NSMenuDelegate {
                 self.serverError = error
             }
             self.render()
+            self.evaluateCostAlerts()
             AgentUsageWindow.shared.update(server: self.server, username: self.config.username,
                 fetched: self.lastServerSuccess, failed: self.serverFailed)
             if let models = self.server?.models {
@@ -1051,13 +1066,14 @@ final class Controller: NSObject, NSMenuDelegate {
     }
 
     private func refreshLocal() {
+        lastLocalAttempt = Date()
         workQueue.async { [weak self] in
             let today = CLI.report(["--today"])
             let week = CLI.report(["--week"])
             let month = CLI.report(["--month"])
             DispatchQueue.main.async {
                 guard let self else { return }
-                if today == nil && week == nil {
+                if today == nil {
                     self.local.failed = true
                 } else {
                     self.local.failed = false
@@ -1066,11 +1082,14 @@ final class Controller: NSObject, NSMenuDelegate {
                         self.local.todayCost = today.cost
                         self.local.todayModels = today.models
                     }
-                    if let week { self.local.weekTokens = week.tokens; self.local.weekCost = week.cost }
-                    if let month { self.local.monthTokens = month.tokens; self.local.monthCost = month.cost }
+
                     self.local.updatedAt = Date()
                 }
+                if let week { self.local.weekTokens = week.tokens; self.local.weekCost = week.cost }
+                self.local.monthFailed = month == nil
+                if let month { self.local.monthTokens = month.tokens; self.local.monthCost = month.cost; self.local.monthUpdatedAt = Date() }
                 self.render()
+                self.evaluateCostAlerts()
                 ChartPopover.shared.update(
                     scope: .today,
                     data: todayChartModels(self.local, self.server).map(Self.datum))
@@ -1118,6 +1137,21 @@ final class Controller: NSObject, NSMenuDelegate {
         }
     }
 
+    private var preferencesSnapshot: PreferencesSnapshot {
+        PreferencesSnapshot(config: config, comparison: panelData.comparison, todayTokens: server?.todayDay?.tokens,
+            serverError: serverError?.message, serverAttempt: lastServerAttempt, serverFetched: lastServerSuccess,
+            submitted: server?.updatedAt, localSuccess: local.updatedAt, localAttempt: lastLocalAttempt,
+            localFailed: local.failed, cliPath: CLI.binary(), hasServer: server != nil, loading: serverLoading)
+    }
+    @objc private func openPreferences() { DropdownPanel.shared.close(); UsagePreferencesWindow.shared.show(preferencesSnapshot) }
+    private func evaluateCostAlerts() {
+        let serverToday = server?.todayDay
+        let daily = serverToday?.cost ?? (local.failed ? nil : local.todayCost)
+        let observed = serverToday != nil ? (serverFailed ? nil : server?.updatedAt) : (local.failed ? nil : local.updatedAt)
+        CostNotifications.shared.evaluate(daily: daily, dailyObserved: observed, dailyThreshold: config.dailyCostBudget,
+            projection: local.monthFailed ? nil : projectMonthEnd(local.monthCost), monthObserved: local.monthFailed ? nil : local.monthUpdatedAt)
+    }
+
     // MARK: Rendering
 
     private var presenter: Presenter {
@@ -1162,6 +1196,7 @@ final class Controller: NSObject, NSMenuDelegate {
         statusItem.button?.toolTip = p.tooltip
         rebuildMenu()
         DropdownPanel.shared.update(panelData)
+        UsagePreferencesWindow.shared.update(preferencesSnapshot)
     }
 
     /// Left-click draws the panel; right-click (or control-click) pops the menu.
@@ -1196,6 +1231,8 @@ final class Controller: NSObject, NSMenuDelegate {
         case .menuPage, .back:
             // The panel turns its own pages; the controller only hears the verbs.
             break
+        case .preferences:
+            openPreferences()
         case .agentUsage:
             openAgentUsage()
         case .profile:
@@ -1389,6 +1426,7 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(actionItem(t("action.refresh"), symbol: "arrow.clockwise",
                                 action: #selector(refreshAll), key: "r"))
 
+        menu.addItem(actionItem(agentText("Trends, display & alerts…", "趋势、显示与提醒…"), symbol: "slider.horizontal.3", action: #selector(openPreferences), key: ","))
         menu.addItem(actionItem(agentText("Agent usage", "Agent 用量"), symbol: "square.grid.2x2",
                                 action: #selector(openAgentUsage), key: "a"))
 
@@ -2003,6 +2041,7 @@ func runContribPNG(path: String) -> Never {
     exit(0)
 }
 
+if CommandLine.arguments.contains("--claude-statusline") { ClaudeStatusBridge.receive(); exit(0) }
 if CommandLine.arguments.contains("--dump") { runDump() }
 if CommandLine.arguments.contains("--check-updates") { runUpdateCheck() }
 if CommandLine.arguments.contains("--self-update") { runSelfUpdate() }
@@ -2021,6 +2060,13 @@ if CommandLine.arguments.contains("--submit") {
     if let line = CLI.firstLine(r.out) { print("stdout: \(line)") }
     if let line = CLI.firstLine(r.err) { print("stderr: \(line)") }
     exit(r.status == 0 ? 0 : 1)
+}
+if CommandLine.arguments.contains("--automatic-checks") {
+    do { try runNativeAutomaticChecks(); exit(0) } catch { fputs("Native automatic checks failed: \(error)\n", stderr); exit(1) }
+}
+if let i = CommandLine.arguments.firstIndex(of: "--preferences-diagnostics"), CommandLine.arguments.count > i + 1 {
+    do { try runUsagePreferencesDiagnostics(directory: CommandLine.arguments[i + 1], dark: CommandLine.arguments.contains("dark")); exit(0) }
+    catch { fputs("Preference diagnostics failed: \(error)\n", stderr); exit(1) }
 }
 if let i = CommandLine.arguments.firstIndex(of: "--agent-diagnostics"), CommandLine.arguments.count > i + 1 {
     _ = NSApplication.shared

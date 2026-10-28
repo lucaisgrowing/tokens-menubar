@@ -8,3 +8,5 @@ trap 'rm -rf "$TMP"' EXIT
 "$TMP/tests"
 "$SWIFTC" -swift-version 5 Sources/Strings.swift Sources/AgentUsage.swift Sources/AgentCatalog.swift Sources/AgentSources.swift Tests/AgentUsageTests.swift -o "$TMP/agent-tests"
 "$TMP/agent-tests"
+"$SWIFTC" -swift-version 5 Sources/UsagePreferences.swift Sources/AgentAutomaticModels.swift Tests/AutomaticTests.swift -o "$TMP/automatic-tests"
+"$TMP/automatic-tests"

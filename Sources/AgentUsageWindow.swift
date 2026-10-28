@@ -28,11 +28,15 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
     private var window: NSWindow?
     private let store: AgentUsageStore
     private let router = AgentOpenRouter()
+    private let automatic = AgentAutomatic()
+    private let museCode = MuseCodeAutomatic()
+    private var automaticTimer: Timer?
     private var body: NSStackView?
     private var search: NSSearchField?
     private var section: NSSegmentedControl?
     private var category: NSPopUpButton?
     private var diagnostics = false
+    private var automaticDiagnostics = false
     private var dayRange = 30
     private var submitted: [AgentClientDay] = []
     private var account = ""
@@ -47,6 +51,8 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         self.store = store
         super.init()
         router.changed = { [weak self] in self?.rebuild() }
+        automatic.changed = { [weak self] in self?.rebuild() }
+        museCode.changed = { [weak self] in self?.rebuild() }
     }
     func show(server: ServerStats?, username: String, fetched: Date?, failed: Bool,
               refresh: @escaping () -> Void) {
@@ -56,7 +62,11 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         rebuild()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        router.refresh()
+        router.refresh(); automatic.refresh(); museCode.refresh()
+        if automaticTimer == nil { automaticTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            guard let self, self.window?.isVisible == true else { return }
+            self.automatic.refresh(); self.museCode.refresh(); self.rebuild()
+        } }
     }
     func update(server: ServerStats?, username: String, fetched: Date?, failed: Bool) {
         account = username; fetchedAt = fetched; submittedAt = server?.updatedAt; sourceFailed = failed
@@ -91,7 +101,7 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         controls.addArrangedSubview(segments); section = segments
         let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         controls.addArrangedSubview(spacer)
-        controls.addArrangedSubview(AgentButton(agentText("Add record", "添加记录")) { [weak self] in self?.edit(nil) })
+        controls.addArrangedSubview(AgentButton(agentText("Manual…", "手动补充…")) { [weak self] in self?.edit(nil) })
         controls.addArrangedSubview(AgentButton(agentText("Import", "导入")) { [weak self] in self?.importFile() })
         controls.addArrangedSubview(AgentButton(agentText("Export", "导出")) { [weak self] in self?.exportFile() })
         root.addArrangedSubview(controls); controls.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
@@ -162,20 +172,14 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
                  [error.localizedDescription, agentText("The original file is preserved. New saves/imports are disabled until it is repaired.", "已保留原文件；修复前不会覆盖或导入新记录。")])
         }
         if section?.selectedSegment == 1 { catalog(); return }
+        if (!diagnostics || automaticDiagnostics) && (categoryIndex == 0 || categoryIndex == 1 || categoryIndex == 2) && (filter.isEmpty || "Codex Claude Code Muse".localizedCaseInsensitiveContains(filter)) { automaticCards() }
         if (categoryIndex == 0 || categoryIndex == 2) && (filter.isEmpty || ("tokens.ci clients Tokens CLI " + submitted.map { $0.client }.joined(separator: " ")).localizedCaseInsensitiveContains(filter)) { clientCard() }
         if !diagnostics && matches(AgentCatalog.all.first { $0.id == "openrouter" }) { routerCard() }
         let records = store.records.filter { record in
             matches(AgentCatalog.all.first { $0.id == record.providerID }, extra: record.account + " " + record.metric + " " + record.note)
         }.sorted { $0.observedAt > $1.observedAt }
-        let title = label(agentText("Manual & imported snapshots · \(records.count)", "手动与导入快照 · \(records.count)"), size: 13, weight: .medium)
-        body.addArrangedSubview(title)
-        if records.isEmpty {
-            card(agentText("Track what the service actually reports", "记录服务实际显示的数据"),
-                [agentText("Add a snapshot for remaining allowance, consumption, tokens or cost. Leave unavailable fields blank. Each snapshot has its own unit, period and reset.",
-                 "可记录剩余额度、已用量、token 或费用；不知道的字段留空，每条记录保留独立单位、周期与重置时间。"),
-                 agentText("Browse the catalog for supported source types and shared-pool caveats. Listing a service never connects your account.",
-                 "在服务目录查看数据来源与共享额度边界；列出服务不代表账号已连接。")],
-                buttons: [AgentButton(agentText("Browse services", "浏览服务")) { [weak self] in self?.section?.selectedSegment = 1; self?.rebuild() }])
+        if !records.isEmpty {
+            body.addArrangedSubview(label(agentText("Optional manual / imported records · \(records.count)", "可选手动 / 导入记录 · \(records.count)"), size: 13, weight: .medium))
         }
         for record in records {
             let provider = AgentCatalog.all.first { $0.id == record.providerID }
@@ -242,13 +246,56 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         }
         card("OpenRouter", lines, buttons: buttons)
     }
+    private func automaticCards() {
+        var codex = [agentText("Official Codex app-server · uses the CLI’s own signed-in account, no credential copy or model call.", "官方 Codex app-server · 使用 CLI 自身的登录，不复制凭据、不调用模型。")]
+        if automatic.busy { codex.append(agentText("Reading…", "正在读取…")) }
+        if let snapshot = automatic.codex { codex += automaticLines(snapshot)
+            if let tokens = snapshot.lifetimeTokens { codex.append(agentText("Codex account lifetime token activity: ", "Codex 账号累计 token 活动：") + agentNumber(tokens)) }
+            if snapshot.usageError != nil { codex.append(agentText("Token-activity endpoint unavailable in this CLI/account; quota results above are separate.", "此 CLI/账号未返回 token 活动；不影响上方独立额度结果。")) }
+        }
+        if let error = automatic.codexError { codex.append(error) }
+        if !automatic.enabled { codex.append(agentText("Not enabled. Requires the official Codex CLI installed and already signed in. ChatGPT-backed plan windows, not all ChatGPT conversations or API billing.", "未启用。需先安装官方 Codex CLI 并登录；读取 ChatGPT 套餐关联的 Codex 窗口，不是全部 ChatGPT 对话或 API 账单。")) }
+        card("Codex", codex, buttons: [AgentButton(automatic.enabled ? agentText("Disable", "停用") : agentText("Enable automatic read", "启用自动读取")) { [weak self] in
+            guard let self else { return }; self.automatic.setEnabled(!self.automatic.enabled)
+        }, AgentButton(agentText("Official setup", "官方安装说明")) { NSWorkspace.shared.open(URL(string: "https://developers.openai.com/codex/cli")!) }], accent: true)
+        let installed = ClaudeBridgeInstall.installed
+        var claude = [agentText("Official Claude Code statusLine · 5-hour / weekly usage from Pro or Max, updated when Claude Code emits status. No cookie or API key needed.", "官方 Claude Code statusLine · Pro / Max 的 5 小时、每周用量，随 Claude Code 状态更新；不需要 cookie 或 API key。")]
+        if installed, let data = try? Data(contentsOf: ClaudeStatusBridge.file), let snapshot = try? ClaudeStatusBridge.parse(data) {
+            claude += automaticLines(snapshot)
+            if let cost = snapshot.sessionEstimatedUSD { claude.append(agentText("Last reported session estimated cost: ≈", "最近上报会话估算费用：≈") + agentNumber(cost) + " USD") }
+        } else { claude.append(installed ? agentText("Waiting for the first response in a new Claude Code session. No data does not mean zero.", "等待新的 Claude Code 会话首次响应；没有数据不等于零用量。") : agentText("One-time opt-in configures a local statusLine. Existing custom status lines are not overwritten. Keep TokensBar in a stable Applications location before enabling.", "一次启用本机 statusLine；不会覆盖已有自定义状态行。请先把 TokensBar 放到稳定的应用程序目录再启用。")) }
+        card("Claude Code", claude, buttons: [AgentButton(installed ? agentText("Remove local bridge…", "移除本机桥接…") : agentText("Enable local bridge…", "启用本机桥接…")) { [weak self] in self?.configureClaude(enable: !installed) }])
+        var muse = [agentText("Muse Code (not Muse personal agent) · official MSP usage/read. Reads the host’s last observed percentages, without a model call. A new host may have no observation; no experimental key mint is used.", "Muse Code（不是 Muse 个人 Agent）· 官方 MSP usage/read，读取主机最近观测的额度，不调用模型；新主机可能没有记录，不使用实验性的密钥铸造接口。")]
+        if let snapshot = museCode.snapshot { muse += automaticLines(snapshot) }
+        if let error = museCode.error { muse.append(error) }
+        if museCode.busy { muse.append(agentText("Reading…", "正在读取…")) }
+        card("Muse Code · MSP", muse, buttons: [AgentButton(museCode.enabled ? agentText("Disable", "停用") : agentText("Enable cached read", "启用缓存读取")) { [weak self] in guard let self else { return }; self.museCode.setEnabled(!self.museCode.enabled) }])
+        card(agentText("Muse · Grok Bot · Cue · Wabi", "Muse · Grok Bot · Cue · Wabi"), [agentText("Personal subscription quotas cannot be automatically connected through a verified supported interface yet. No manual copying is required or presented as automatic. The catalog keeps official references; these services are excluded from totals.", "这四家的个人订阅额度暂未接通经过验证的受支持接口。不会要求你反复抄数字，也不把手动记录当作自动同步；目录保留官方资料，未接通的服务不计入总量。")])
+    }
+    private func automaticLines(_ snapshot: AgentAutomaticSnapshot) -> [String] {
+        var lines = snapshot.windows.map { window in
+            window.label + (window.resetsAt.map { $0 <= Date() } == true ? agentText(" · expired observation", " · 已过期记录") : "") + agentText(" · used ", " · 已用 ") + agentNumber(window.usedPercent) + "% · " + agentText("remaining ", "剩余 ") + agentNumber(window.remainingPercent) + "%" + (window.resetsAt.map { agentText(" · resets ", " · 重置 ") + date($0) } ?? "")
+        }
+        if snapshot.windows.isEmpty { lines.append(agentText("No active quota windows returned. Unknown, not unlimited.", "未返回有效额度窗口；未知，不代表无限额。")) }
+        lines.append(agentText("Observed ", "获取于 ") + date(snapshot.observedAt) + (Date().timeIntervalSince(snapshot.observedAt) > 300 ? agentText(" · may be stale", " · 可能已过期") : ""))
+        lines.append(agentText("Source-specific values stay separate from tokens.ci to avoid double counting.", "与 tokens.ci 分开展示，避免重复计数。"))
+        return lines
+    }
+    private func configureClaude(enable: Bool) {
+        let alert = NSAlert(); alert.messageText = enable ? agentText("Enable Claude Code usage bridge?", "启用 Claude Code 用量桥接？") : agentText("Remove Claude Code bridge?", "移除 Claude Code 桥接？")
+        alert.informativeText = agentText("Changes only ~/.claude/settings.json statusLine. A local command receives Claude Code’s JSON, retains only quota percentages/reset times and last session estimated cost, and never uploads them. Other settings stay unchanged. Existing custom status lines are not replaced. New CLI sessions pick up the change.", "仅修改 ~/.claude/settings.json 的 statusLine。本机命令接收 Claude Code JSON，只保留额度百分比、重置时间与最近会话估算费用，不上传；其他设置保留，已有自定义状态行不替换。新的 CLI 会话生效。")
+        alert.addButton(withTitle: enable ? agentText("Enable", "启用") : agentText("Remove", "移除")); alert.addButton(withTitle: agentText("Cancel", "取消"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try ClaudeBridgeInstall.change(enable: enable); rebuild() }
+        catch { message(agentText("Bridge unchanged", "桥接未更改"), agentText("An existing custom statusLine or unreadable settings prevented this change. No overwrite was made.", "已有自定义 statusLine 或设置不可读，未覆盖。")) }
+    }
     private func catalog() {
         body?.addArrangedSubview(label(agentText("\(AgentCatalog.all.count) researched entries · checked \(AgentCatalog.checkedOn). Representative, not exhaustive.",
             "\(AgentCatalog.all.count) 项服务 · 核对于 \(AgentCatalog.checkedOn)，广泛覆盖但非穷尽。"), size: 12, secondary: true))
         for provider in AgentCatalog.all.filter({ matches($0, extra: $0.note) }) {
-            let type = provider.upstreamClient ? agentText("Upstream coding client · actual submitted records only", "上游编码客户端 · 仅实际提交记录可自动展示")
+            let type = ["client-codex-cli", "client-claude-code"].contains(provider.id) ? agentText("Official local CLI connector available · enable in My usage", "可用官方本机 CLI 接入 · 在「我的用量」启用") : provider.upstreamClient ? agentText("Upstream coding client · actual submitted records only", "上游编码客户端 · 仅实际提交记录可自动展示")
                 : provider.id == "openrouter" ? agentText("Optional official connector · not connected by catalog inclusion", "可选官方接口 · 列入目录不代表已连接")
-                : agentText("Manual / import available · account not connected", "可手动 / 导入 · 未连接账户")
+                : agentText("No automatic adapter in this build · directory only", "此版没有自动接入 · 仅资料入口")
             card(provider.name, [type, provider.note], buttons: [
                 AgentButton(agentText("Record usage", "记录用量")) { [weak self] in self?.edit(nil, providerID: provider.id) },
                 AgentButton(agentText("Source documentation", "来源文档")) { if let url = URL(string: provider.documentation) { NSWorkspace.shared.open(url) } }])
@@ -326,7 +373,7 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         controller.makeWindow()
         guard let window = controller.window, let content = window.contentView else { throw AgentUsageError.invalidText }
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        window.setContentSize(NSSize(width: 900, height: 940))
+        window.setContentSize(NSSize(width: 700, height: 720))
         // Remove the optional router card from diagnostic content so no real saved key is read.
         controller.filter = ""
         controller.search?.stringValue = controller.filter
@@ -355,6 +402,11 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         controller.dayRange = 30
         controller.section?.selectedSegment = catalog ? 1 : 0
         controller.rebuild()
+        if CommandLine.arguments.contains("automatic") {
+            controller.automaticDiagnostics = true; controller.section?.selectedSegment = 0
+            try store.remove(id: sample.id); controller.submitted = []
+            controller.rebuild()
+        }
         print("PASS: 5 native Agent control-path checks")
         content.layoutSubtreeIfNeeded()
         // Fixed content surface, no synthetic substitute drawing or post-export upscaling.
@@ -367,7 +419,7 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         content.cacheDisplay(in: content.bounds, to: rep)
         guard let data = rep.representation(using: .png, properties: [:]) else { throw AgentUsageError.invalidText }
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        let name = "agent-\(catalog ? "catalog" : "usage")-\(L10n.current.rawValue)-\(dark ? "dark" : "light").png"
+        let name = "agent-\(controller.automaticDiagnostics ? "automatic" : catalog ? "catalog" : "usage")-\(L10n.current.rawValue)-\(dark ? "dark" : "light").png"
         try data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
         print("native agent view \(name): \(rep.pixelsWide)x\(rep.pixelsHigh), cards=\(controller.body?.arrangedSubviews.count ?? 0)")
         window.close()

@@ -86,6 +86,7 @@ final class PanelMenuView: NSView {
                            enabled: data.canSubmit && !data.busy))
         out.append(MenuRow(symbol: "arrow.clockwise", title: t("action.refresh"),
                            kind: .action(.refresh), hint: t("hint.refresh")))
+        out.append(MenuRow(symbol: "slider.horizontal.3", title: agentText("Trends, display & alerts", "趋势、显示与提醒"), kind: .action(.preferences), hint: agentText("Data health, menu order and estimated cost alerts", "数据状态、菜单顺序与估算费用提醒")))
         out.append(MenuRow(symbol: "square.grid.2x2", title: agentText("Agent usage", "Agent 用量"),
                            kind: .action(.agentUsage),
                            hint: agentText("Usage, allowances and service catalog", "用量、剩余额度与服务目录")))
