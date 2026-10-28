@@ -324,10 +324,29 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         controller.section?.selectedSegment = catalog ? 1 : 0
         controller.rebuild()
         content.layoutSubtreeIfNeeded()
-        // Exercise search and category controls on the same real native view.
-        controller.filter = "a-service-that-does-not-exist"; controller.rebuild()
-        precondition(controller.body != nil)
-        controller.filter = ""; controller.rebuild()
+        // Exercise the actual native search/category/section event paths. No account access.
+        controller.section?.selectedSegment = 1
+        controller.changeSection(controller.section!)
+        precondition(controller.body?.arrangedSubviews.count == AgentCatalog.all.count + 1)
+        controller.search?.stringValue = "a-service-that-does-not-exist"
+        controller.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+        precondition(controller.body?.arrangedSubviews.count == 1, "Empty catalog search must hide services")
+        controller.search?.stringValue = ""
+        controller.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+        controller.category?.selectItem(at: 3)
+        controller.changeCategory(controller.category!)
+        precondition(controller.body?.arrangedSubviews.count == AgentCatalog.all.filter { $0.category == "api" }.count + 1)
+        controller.category?.selectItem(at: 0)
+        controller.changeCategory(controller.category!)
+        controller.section?.selectedSegment = 0
+        controller.changeSection(controller.section!)
+        precondition(controller.body?.arrangedSubviews.count == 3, "Demo must show submitted activity, snapshot title and one manual record")
+        controller.dayRange = 7; controller.rebuild()
+        precondition(controller.body?.arrangedSubviews.count == 3)
+        controller.dayRange = 30
+        controller.section?.selectedSegment = catalog ? 1 : 0
+        controller.rebuild()
+        print("PASS: 5 native Agent control-path checks")
         content.layoutSubtreeIfNeeded()
         // Fixed content surface, no synthetic substitute drawing or post-export upscaling.
         let scale: CGFloat = 2
