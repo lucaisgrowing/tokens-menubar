@@ -12,6 +12,7 @@ struct PreferencesSnapshot {
     var localSuccess: Date?
     var localAttempt: Date?
     var localFailed: Bool
+    var localError: String?
     var cliPath: String?
     var hasServer: Bool
     var loading: Bool
@@ -24,6 +25,15 @@ final class CostNotifications {
     private(set) var status = agentText("Notifications off until enabled and allowed by macOS.", "启用且获得 macOS 允许后才会通知。")
     var monthlyThreshold: Double { defaults.double(forKey: "cost.monthThreshold") }
     var interval: TimeInterval { defaults.double(forKey: "cost.notificationInterval") }
+    func inspectPermission(_ completion: @escaping () -> Void) {
+        guard interval > 0 else { status = agentText("Notifications off; menu-bar colour still works.", "通知已关闭；菜单栏颜色提醒仍生效。"); completion(); return }
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.status = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional ? agentText("macOS allows notifications; Focus and system settings may hide them.", "macOS 已允许通知；专注模式和系统设置可能隐藏横幅。") : agentText("macOS has not allowed notifications. Save to request permission, or check System Settings → Notifications.", "macOS 尚未允许通知；保存以请求授权，或查看「系统设置 → 通知」。")
+                completion()
+            }
+        }
+    }
     func authorize(_ completion: @escaping () -> Void) {
         guard interval > 0 else { status = agentText("Notifications off; menu-bar colour still works.", "通知已关闭；菜单栏颜色提醒仍生效。"); completion(); return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { allowed, error in
@@ -135,7 +145,7 @@ final class UsagePreferencesWindow: NSObject {
         let row = NSStackView(views: [button(agentText("Retry refresh", "重试刷新"), #selector(refresh)), button(agentText("Submit local activity", "提交本机活动"), #selector(submit))]); row.spacing = 8; row.views.last?.isHidden = s.cliPath == nil; stack?.addArrangedSubview(row)
         if s.serverError != nil { stack?.addArrangedSubview(button(agentText("Read token settings…", "读取令牌设置…"), #selector(readToken))) }
         heading(agentText("This Mac · tokens CLI", "此 Mac · tokens CLI"))
-        add(s.cliPath == nil ? agentText("CLI not found", "未找到 CLI") : s.localFailed ? agentText("Today’s CLI scan failed; prior values are retained", "今日 CLI 扫描失败，保留旧数值") : agentText("Today’s local scan is available", "今日本机扫描可用"), weight: .medium)
+        add(s.localError ?? (s.cliPath == nil ? agentText("CLI not found", "未找到 CLI") : s.localFailed ? agentText("Today’s CLI scan failed; prior values are retained", "今日 CLI 扫描失败，保留旧数值") : agentText("Today’s local scan is available", "今日本机扫描可用")), weight: .medium)
         add(agentText("Last attempt: ", "最近尝试：") + stamp(s.localAttempt) + "\n" + agentText("Today’s last successful scan: ", "今日成功扫描：") + stamp(s.localSuccess), secondary: true)
         add(agentText("If installed but unable to run, check the CLI’s architecture/version and its own login in Terminal. TokensBar never silently reinstalls it or submits on refresh.", "若已安装但无法运行，请在终端检查 CLI 架构、版本及其登录。TokensBar 不会静默重装；刷新也不等于提交。"), secondary: true)
         stack?.addArrangedSubview(button(agentText("Official CLI setup", "官方 CLI 安装说明"), #selector(cliHelp)))
@@ -165,7 +175,31 @@ final class UsagePreferencesWindow: NSObject {
         heading(agentText("Notification frequency · per threshold", "通知频率 · 每种阈值")); stack?.addArrangedSubview(pop)
         stack?.addArrangedSubview(button(agentText("Save thresholds", "保存阈值"), #selector(saveAlerts)))
         let f = label(CostNotifications.shared.status, secondary: true); feedback = f; stack?.addArrangedSubview(f); f.widthAnchor.constraint(equalTo: stack!.widthAnchor).isActive = true
+        CostNotifications.shared.inspectPermission { [weak self] in self?.feedback?.stringValue = CostNotifications.shared.status }
         add(agentText("Only a successful, recent (≤15 min) observation can trigger an alert. Failed refreshes, unknown values and old snapshots never count as a new spend. Focus can suppress banners.", "仅成功获取且 15 分钟内的数据触发提醒；刷新失败、未知值及旧快照不会当作新费用。专注模式可能隐藏横幅。"), secondary: true)
+    }
+    // Disposable CI controls: no live config, notification prompt or data submission.
+    func checkNativeDisplayControls(_ fixture: PreferencesSnapshot) {
+        let old = onChange
+        var result: [String] = []
+        onChange = { items, _ in result = items }
+        defer { onChange = old }
+        show(fixture, tab: 2)
+        func buttons(_ view: NSView) -> [NSButton] { (view as? NSButton).map { [$0] } ?? view.subviews.flatMap(buttons) }
+        let up = buttons(window!.contentView!).first { $0.title == "↑" && $0.isEnabled }!
+        up.performClick(nil)
+        precondition(result == ["rank", "tokens"], "native arrow updates visible order")
+        let checks = buttons(window!.contentView!).filter { $0.title == agentText("Today’s tokens", "今日 token") || $0.title == agentText("Leaderboard rank", "排名") }
+        checks.first { $0.title == agentText("Today’s tokens", "今日 token") }!.performClick(nil)
+        precondition(result == ["rank"], "native checkbox updates selected items")
+        checks.first { $0.title == agentText("Leaderboard rank", "排名") }!.performClick(nil)
+        precondition(result == ["rank"], "last enabled item cannot be removed")
+        let domain = "tokensbar-disposable-" + UUID().uuidString
+        let store = UserDefaults(suiteName: domain)!
+        store.set(result, forKey: "display.menuItems")
+        precondition(UserDefaults(suiteName: domain)!.stringArray(forKey: "display.menuItems") == result, "display order persistence")
+        store.removePersistentDomain(forName: domain)
+        print("PASS: 4 native display reorder/toggle/last-item/persistence checks")
     }
     @objc private func tabChanged(_ sender: NSSegmentedControl) { chosenTab = sender.selectedSegment; configure() }
     @objc private func toggle(_ sender: NSButton) {

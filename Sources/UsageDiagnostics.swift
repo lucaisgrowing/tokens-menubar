@@ -9,7 +9,7 @@ func runUsagePreferencesDiagnostics(directory: String, dark: Bool) throws {
         comparison: UsageComparison(mean: 100000, changePercent: 50, topModel: "DEMO model", topModelDelta: 35000), todayTokens: 150000,
         serverError: agentText("DEMO · Network unavailable. Previous values retained.", "演示状态 · 网络不可用，保留旧数值。"),
         serverAttempt: now, serverFetched: now.addingTimeInterval(-1200), submitted: now.addingTimeInterval(-90000),
-        localSuccess: now.addingTimeInterval(-1800), localAttempt: now, localFailed: true, cliPath: nil, hasServer: true, loading: false)
+        localSuccess: now.addingTimeInterval(-1800), localAttempt: now, localFailed: true, localError: agentText("DEMO · CLI cannot launch; check its architecture.", "演示状态 · CLI 无法启动，请检查架构。"), cliPath: nil, hasServer: true, loading: false)
     let view = UsagePreferencesWindow.shared
     for tab in 0...3 {
         view.show(sample, tab: tab)
@@ -22,6 +22,7 @@ func runUsagePreferencesDiagnostics(directory: String, dark: Bool) throws {
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         try png.write(to: URL(fileURLWithPath: directory).appendingPathComponent("preferences-\(tab)-\(L10n.current.rawValue)-\(dark ? "dark" : "light").png"))
     }
+    view.checkNativeDisplayControls(sample)
     print("PASS: four native preference panes rendered at 2×; DEMO fixtures, no notification attempts")
 }
 

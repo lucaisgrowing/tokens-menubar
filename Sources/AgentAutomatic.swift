@@ -99,7 +99,7 @@ enum LocalUsageRPC {
         process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
         try process.run()
         defer { try? input.fileHandleForWriting.close(); if process.isRunning { process.terminate() }; try? output.fileHandleForReading.close() }
-        func send(_ o: [String: Any]) throws { var data = try JSONSerialization.data(withJSONObject: o); data.append(10); try input.fileHandleForWriting.write(contentsOf: data) }
+        func send(_ o: [String: Any]) throws { var data = try JSONSerialization.data(withJSONObject: o, options: [.withoutEscapingSlashes, .sortedKeys]); data.append(10); try input.fileHandleForWriting.write(contentsOf: data) }
         try send(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "tokensbar", "title": "TokensBar", "version": "1.12.0"]]])
         var buffer = Data(), responses: [Int: [String: Any]] = [:], total = 0
         let deadline = Date().addingTimeInterval(timeout), fd = output.fileHandleForReading.fileDescriptor

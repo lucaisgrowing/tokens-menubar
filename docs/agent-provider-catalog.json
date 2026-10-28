@@ -59,8 +59,8 @@
       "category": "personal",
       "unit": "service-reported units",
       "documentation": "https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work",
-      "noteEN": "Claude app and Claude Code share plan usage; session and weekly windows differ. API billing is separate. No personal quota adapter in this build.",
-      "noteZH": "Claude 与 Claude Code 共用套餐用量；会话与每周窗口不同，API 另行计费。当前未接个人额度接口。",
+      "noteEN": "Claude app and Claude Code share plan usage; session and weekly windows differ. API billing is separate. Optional Claude Code statusLine bridge reports plan windows only when supplied by the CLI.",
+      "noteZH": "Claude 与 Claude Code 共用套餐用量；会话与每周窗口不同，API 另行计费。可选 Claude Code statusLine 桥接仅显示 CLI 提供的套餐窗口。",
       "upstreamClient": false
     },
     {
@@ -254,13 +254,23 @@
       "upstreamClient": true
     },
     {
+      "id": "muse-code",
+      "name": "Muse Code",
+      "category": "coding",
+      "unit": "percent",
+      "documentation": "https://meta-models.github.io/muse-code-sdk/1.4/guides/msp-wire/",
+      "noteEN": "Optional local muse serve → usage/read reports cached observed subscription windows. No usage/refresh, key minting or model turn. A new host can lack observations. Not the Meta Muse personal agent.",
+      "noteZH": "可选本机 muse serve → usage/read 读取缓存套餐观测；不调用 usage/refresh、不铸造密钥、不调用模型。新主机可能没有缓存；不是 Meta Muse 个人 Agent。",
+      "upstreamClient": false
+    },
+    {
       "id": "client-claude-code",
       "name": "Claude Code",
       "category": "coding",
       "unit": "tokens",
       "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
-      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Claude subscription pool is shared with Claude app; API mode differs.",
-      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 Claude 订阅额度与应用共用；API 登录另计。",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. An opt-in official Claude Code statusLine bridge can additionally report plan windows when its CLI supplies them; API mode differs.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。可选官方 Claude Code statusLine 桥接会显示 CLI 实际返回的套餐窗口；API 登录另计。",
       "upstreamClient": true
     },
     {
@@ -299,8 +309,8 @@
       "category": "coding",
       "unit": "tokens",
       "documentation": "https://github.com/missuo/tokens/blob/c2f3857c328478e2599a3ba871151ec255e00831/README.md",
-      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. No subscription quota connector. Plan allowance may be shared with Work; local token logs are not remaining credits.",
-      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。未接订阅额度。 套餐额度可能与 Work 共用；本机 token 日志不是剩余额度。",
+      "noteEN": "Upstream Tokens lists this coding client. Submitted client-day tokens and estimated cost appear automatically only when returned by your configured tokens.ci account. An opt-in official Codex app-server connector separately reads reported rate-limit windows and account lifetime tokens; supported logged-in CLI required.",
+      "noteZH": "Tokens 上游列出的编码客户端；只有已提交且由当前 tokens.ci 账号返回的客户端每日 token 与估算费用才会自动显示。可选官方 Codex app-server 连接器另行读取限额窗口与账号累计 token；需已登录的受支持 CLI。",
       "upstreamClient": true
     },
     {

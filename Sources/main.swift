@@ -56,7 +56,7 @@ struct Config {
         if let v = o["menuBarRank"] as? String, let m = RankMode(rawValue: v) { cfg.menuBarRank = m }
         if let v = o["language"] as? String, let l = Lang(rawValue: v) { cfg.language = l }
         if let v = o["supportURL"] as? String, !v.isEmpty { cfg.supportURL = v }
-        if let v = (o["dailyCostBudget"] as? NSNumber)?.doubleValue, v >= 0 { cfg.dailyCostBudget = v }
+        if let v = (o["dailyCostBudget"] as? NSNumber)?.doubleValue, v.isFinite, v >= 0 { cfg.dailyCostBudget = v }
         if let arr = o["menuBarItems"] as? [String] {
             let picked = arr.filter { ["tokens", "cost", "rank"].contains($0) }
             if !picked.isEmpty { cfg.menuBarItems = picked }
@@ -258,6 +258,7 @@ struct LocalStats {
     var todayModels: [ModelSlice] = []
     var updatedAt: Date?
     var failed = false
+    var failureReason: String?
     var monthFailed = false
     var monthUpdatedAt: Date?
 }
@@ -419,11 +420,13 @@ enum CLI {
     /// The per-model split is no longer in that output — the donut's today slices
     /// come from the server's contributions instead (`ServerStats.todayModels`),
     /// so this returns no models and the chart falls back to the server.
-    static func report(_ scopeArgs: [String]) -> (tokens: Int, cost: Double, models: [ModelSlice])? {
-        guard let r = run(["submit", "--dry-run"] + scopeArgs), r.status == 0,
-              let text = String(data: r.out, encoding: .utf8)
-        else { return nil }
-        return CLIReportParser.parse(text).map { ($0.tokens, $0.cost, []) }
+    static func report(_ scopeArgs: [String]) -> (tokens: Int, cost: Double, models: [ModelSlice])? { reportDetailed(scopeArgs).value }
+    static func reportDetailed(_ scopeArgs: [String]) -> (value: (tokens: Int, cost: Double, models: [ModelSlice])?, error: String?) {
+        guard let r = run(["submit", "--dry-run"] + scopeArgs) else { return (nil, agentText("tokens CLI not installed in a known executable location.", "未在已知可执行位置找到 tokens CLI。")) }
+        guard r.status != -1 else { return (nil, agentText("CLI exists but macOS could not launch it. Check architecture, Rosetta and executable permissions.", "CLI 文件存在但 macOS 无法启动；请检查架构、Rosetta 及执行权限。")) }
+        guard r.status == 0 else { return (nil, agentText("CLI scan exited unsuccessfully or timed out. Check the CLI’s own login/version in Terminal; old values remain dated.", "CLI 扫描失败或超时；请在终端检查 CLI 登录与版本，旧数据保留原时间。")) }
+        guard let text = String(data: r.out, encoding: .utf8), let value = CLIReportParser.parse(text) else { return (nil, agentText("CLI output was not a complete supported totals report. Update/check the CLI; missing values were not read as zero.", "CLI 未返回完整受支持的总量格式；请检查版本，缺失数值没有读作零。")) }
+        return ((value.tokens, value.cost, []), nil)
     }
 }
 
@@ -1068,11 +1071,13 @@ final class Controller: NSObject, NSMenuDelegate {
     private func refreshLocal() {
         lastLocalAttempt = Date()
         workQueue.async { [weak self] in
-            let today = CLI.report(["--today"])
+            let todayResult = CLI.reportDetailed(["--today"])
+            let today = todayResult.value
             let week = CLI.report(["--week"])
             let month = CLI.report(["--month"])
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.local.failureReason = todayResult.error
                 if today == nil {
                     self.local.failed = true
                 } else {
@@ -1141,7 +1146,7 @@ final class Controller: NSObject, NSMenuDelegate {
         PreferencesSnapshot(config: config, comparison: panelData.comparison, todayTokens: server?.todayDay?.tokens,
             serverError: serverError?.message, serverAttempt: lastServerAttempt, serverFetched: lastServerSuccess,
             submitted: server?.updatedAt, localSuccess: local.updatedAt, localAttempt: lastLocalAttempt,
-            localFailed: local.failed, cliPath: CLI.binary(), hasServer: server != nil, loading: serverLoading)
+            localFailed: local.failed, localError: local.failureReason, cliPath: CLI.binary(), hasServer: server != nil, loading: serverLoading)
     }
     @objc private func openPreferences() { DropdownPanel.shared.close(); UsagePreferencesWindow.shared.show(preferencesSnapshot) }
     private func evaluateCostAlerts() {

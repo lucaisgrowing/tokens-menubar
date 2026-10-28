@@ -24,6 +24,7 @@ jobs:
       - name: Build universal app
         run: ./build.sh --universal
       - name: Native automatic connector and settings tests
+        timeout-minutes: 2
         run: ./TokensBar.app/Contents/MacOS/TokensBar --automatic-checks
       - name: Verify bundle
         run: bash Tools/verify-release.sh
