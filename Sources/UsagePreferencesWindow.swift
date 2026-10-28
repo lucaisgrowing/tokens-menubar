@@ -112,7 +112,7 @@ final class UsagePreferencesWindow: NSObject {
         tabs.selectedSegment = chosenTab; self.tabs = tabs
         let body = NSStackView(); body.orientation = .vertical; body.alignment = .leading; body.spacing = 14; self.stack = body
         let scroll = NSScrollView(); scroll.drawsBackground = false; scroll.hasVerticalScroller = true
-        let doc = NSView(); scroll.documentView = doc; body.translatesAutoresizingMaskIntoConstraints = false; doc.addSubview(body)
+        let doc = AgentFlippedView(); scroll.documentView = doc; body.translatesAutoresizingMaskIntoConstraints = false; doc.addSubview(body)
         for view in [title, subtitle, tabs, scroll] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
         doc.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([

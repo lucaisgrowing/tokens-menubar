@@ -293,11 +293,11 @@ final class AgentUsageWindow: NSObject, NSSearchFieldDelegate {
         body?.addArrangedSubview(label(agentText("\(AgentCatalog.all.count) researched entries · checked \(AgentCatalog.checkedOn). Representative, not exhaustive.",
             "\(AgentCatalog.all.count) 项服务 · 核对于 \(AgentCatalog.checkedOn)，广泛覆盖但非穷尽。"), size: 12, secondary: true))
         for provider in AgentCatalog.all.filter({ matches($0, extra: $0.note) }) {
-            let type = ["client-codex-cli", "client-claude-code"].contains(provider.id) ? agentText("Official local CLI connector available · enable in My usage", "可用官方本机 CLI 接入 · 在「我的用量」启用") : provider.upstreamClient ? agentText("Upstream coding client · actual submitted records only", "上游编码客户端 · 仅实际提交记录可自动展示")
+            let type = ["client-codex-cli", "client-claude-code", "muse-code"].contains(provider.id) ? agentText("Official local CLI connector available · enable in My usage", "可用官方本机 CLI 接入 · 在「我的用量」启用") : provider.upstreamClient ? agentText("Upstream coding client · actual submitted records only", "上游编码客户端 · 仅实际提交记录可自动展示")
                 : provider.id == "openrouter" ? agentText("Optional official connector · not connected by catalog inclusion", "可选官方接口 · 列入目录不代表已连接")
                 : agentText("No automatic adapter in this build · directory only", "此版没有自动接入 · 仅资料入口")
             card(provider.name, [type, provider.note], buttons: [
-                AgentButton(agentText("Record usage", "记录用量")) { [weak self] in self?.edit(nil, providerID: provider.id) },
+                AgentButton(agentText("Archive reference", "留存参考")) { [weak self] in self?.edit(nil, providerID: provider.id) },
                 AgentButton(agentText("Source documentation", "来源文档")) { if let url = URL(string: provider.documentation) { NSWorkspace.shared.open(url) } }])
         }
     }

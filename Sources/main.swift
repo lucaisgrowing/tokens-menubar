@@ -2070,6 +2070,8 @@ if CommandLine.arguments.contains("--automatic-checks") {
     do { try runNativeAutomaticChecks(); exit(0) } catch { fputs("Native automatic checks failed: \(error)\n", stderr); exit(1) }
 }
 if let i = CommandLine.arguments.firstIndex(of: "--preferences-diagnostics"), CommandLine.arguments.count > i + 1 {
+    _ = NSApplication.shared
+    applyLanguage(Config(username: "DEMO"))
     do { try runUsagePreferencesDiagnostics(directory: CommandLine.arguments[i + 1], dark: CommandLine.arguments.contains("dark")); exit(0) }
     catch { fputs("Preference diagnostics failed: \(error)\n", stderr); exit(1) }
 }

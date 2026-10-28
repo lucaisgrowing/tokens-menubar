@@ -25,11 +25,13 @@ Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond sy
 
 ## 1.12.0 Agent usage candidate (unreleased)
 
-This native candidate adds a unified Agent usage window for submitted coding activity, opt-in per-key OpenRouter data and local allowance/consumption snapshots, plus a 66-entry service catalog (not 66 integrations). macOS universal compilation, core tests and native control-path checks pass; real-account, Keychain and complete manual acceptance remain unverified. It is not included in the v1.11.1 download and no new release has been published. See [implementation, sources and verification limits](docs/AGENT-USAGE.md).
+This candidate adds opt-in official local Codex quota reads and a Claude Code statusLine bridge, alongside submitted tokens.ci client data and optional OpenRouter per-key data. Muse Code cached reads are experimental here and are not the Muse personal agent. Meta Muse, Grok Bot, Cue and Wabi personal quotas are **not automatically connected**; the 67-entry reference catalog is not an integration count. Manual snapshots remain optional, not the automation solution.
 
-<p align="center"><img src="docs/agent-usage-en-light.png" width="450" alt="Native Agent usage window with synthetic demo values"><img src="docs/agent-catalog-en-dark.png" width="450" alt="Native researched service catalog in dark mode"></p>
+It also adds a compact Usage & display window: truthful today/7-day comparisons, separate fetch/submission/CLI health, estimated-cost thresholds and notification frequency, and editable/persistent menu-bar order. Existing panel layout, fonts and green accent remain. No new release or main merge; the v1.11.1 download does not include this candidate. See [sources, setup, tests and limits](docs/AGENT-USAGE.md).
 
-These candidate images are native AppKit offscreen renders at 2×, with synthetic demo data and a fixed window background, not connected account values.
+<p align="center"><img src="docs/agent-automatic-en-light.png" width="420" alt="Actual native automatic-connector setup screen; no accounts connected"><img src="docs/preferences-2-en-dark.png" width="310" alt="Native editable menu-bar composition and order"></p>
+
+These 2× native AppKit offscreen renders use synthetic fixtures and explicit failure/demo states, not connected account values. Authenticated account results, Keychain and notification delivery are not verified.
 
 ## What's new in 1.11.1
 

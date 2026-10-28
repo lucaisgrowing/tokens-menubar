@@ -32,7 +32,7 @@ func codexRateWindows(_ result: [String: Any]) throws -> [AgentRateWindow] {
             guard let window = rate[name] as? [String: Any] else { continue }
             guard let used = agentFinite(window["usedPercent"]) else { throw AgentAutomaticError.malformed }
             let minutes = agentFinite(window["windowDurationMins"])
-            let duration = minutes.map { $0 >= 1440 ? String(format: "%.0fd", $0 / 1440) : String(format: "%.0fh", $0 / 60) } ?? name
+            let duration = minutes.map { $0 >= 1440 ? String(format: "%.0fd", $0 / 1440) : ($0 >= 60 ? String(format: "%.1fh", $0 / 60) : String(format: "%.0fm", $0)) } ?? name
             windows.append(AgentRateWindow(label: pool + " · " + duration, usedPercent: used,
                 resetsAt: agentFinite(window["resetsAt"]).map { Date(timeIntervalSince1970: $0) }))
         }

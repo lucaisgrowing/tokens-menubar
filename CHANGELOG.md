@@ -1,10 +1,12 @@
 # Changelog
 
-## 1.12.0 candidate — unreleased
+## 1.12.0 candidate — unreleased, build 20
 
-- Add a native unified Agent usage entrance, separate from the existing panel, with actual tokens.ci client activity, validated local allowance/consumption snapshots, JSON import/export and an opt-in official OpenRouter per-key connector.
-- Add a 66-entry researched catalog with explicit source, account/plan boundaries and unavailable-connector labels; do not aggregate incompatible units or shared pools.
-- Preserve the existing green design, fonts and contribution-label repair. Candidate bundle 1.12.0 (build 19) builds for arm64 and x86_64; 76 existing checks, 57 feature checks, 10 native accent checks and five native control paths pass. Native 2× demo screenshots are included. No main merge or release; real Keychain, live-account and complete manual acceptance remain outstanding. See `docs/AGENT-USAGE.md`.
+- Replace manual-entry-as-automation framing with opt-in supported local paths: Codex app-server account rate-limit/activity reads, Claude Code statusLine sanitized quota observations, and clearly separate Muse Code cached usage/read (not Meta Muse personal agent). Keep tokens.ci submitted scope and OpenRouter per-key scope separate. No cookie scraping, account-key minting or model turn.
+- Add strict today/prior-seven UTC-day comparison; missing days are unknown, not zero. Attribute a model only from complete per-day detail; preserve existing main-panel order.
+- Add compact native data-health, menu-bar and alert settings: attempts/success/submission times, specific CLI errors, real retry/setup/submission actions, editable persistent display order, daily/month-end estimated-cost thresholds and bounded notification frequency. Permission/OS acceptance does not claim displayed delivery.
+- Preserve typography and deep-green native light/dark direction; regenerate actual 2× AppKit screenshots. A 67-entry reference catalog and optional snapshots remain, but are not live integrations. Personal Meta Muse/Grok Bot/Cue/Wabi quota automation remains unavailable in this candidate.
+- Universal arm64/x86_64 candidate; 76 existing, 57 Agent and 35 automation/trend/preferences regressions, plus native controls/transport/accent checks. Authenticated provider data, real Keychain, notification banners and full manual UI acceptance remain unverified. No main merge, tag or release. See `docs/AGENT-USAGE.md`.
 
 ## 1.11.1
 

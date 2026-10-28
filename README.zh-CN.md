@@ -25,11 +25,13 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 ## 1.12.0 未发布候选版：Agent 用量统一入口
 
-原生候选版新增 Agent 用量窗口：查看已提交编码活动、可选 OpenRouter 单 key 数据，手动记录/导入各服务额度与消耗，并提供 66 项服务目录。目录不是 66 个已接入服务。macOS 双架构编译、核心测试和原生控件路径检查已通过；真实账号、Keychain 和完整人工验收尚未验证。此功能不在 v1.11.1 下载包中，未发布新 release。详见[实现、来源与验证边界](docs/AGENT-USAGE.md)。
+候选版加入可选的官方本机 Codex 额度读取、Claude Code statusLine 桥接，保留 tokens.ci 已提交客户端数据及 OpenRouter 单 key 接口。另有 Muse Code 缓存读取，但它不是 Muse 个人 Agent。Meta Muse、Grok Bot、Cue、Wabi 个人额度**仍未自动接通**；67 项资料目录不等于 67 个集成，手动快照只作可选参考，不再当作自动化方案。
 
-<p align="center"><img src="docs/zh/agent-usage-zh-light.png" width="450" alt="带虚构演示数据的原生 Agent 用量窗口"><img src="docs/zh/agent-catalog-zh-dark.png" width="450" alt="深色原生服务目录"></p>
+还增加紧凑的「用量与显示」窗口：今日与前七日同口径对比、区分读取/提交/CLI 的数据状态、估算费用阈值与通知频率、可调整并记住的菜单栏组合和顺序。原面板顺序、字体与墨绿风格保留。未合并 main、未发布新 release，v1.11.1 下载包不含此候选版。详见[来源、设置、测试与限制](docs/AGENT-USAGE.md)。
 
-候选版图片由 macOS 原生 AppKit 以 2× 离屏渲染，使用虚构演示数据和固定窗口底色，不是真实已连接账号。
+<p align="center"><img src="docs/zh/agent-automatic-zh-light.png" width="420" alt="真实原生自动接入设置界面，未连接账号"><img src="docs/zh/preferences-2-zh-dark.png" width="310" alt="原生菜单栏内容与顺序设置"></p>
+
+图片为 2× 原生 AppKit 离屏渲染，使用虚构演示数据或明确标示的失败状态，不是真实账号用量。已登录账号返回、Keychain 及通知送达尚未实测。
 
 ## 1.11.1 更新了什么
 
