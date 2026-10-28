@@ -32,6 +32,9 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 <p align="center"><img src="docs/zh/agent-automatic-zh-light.png" width="420" alt="真实原生自动接入设置界面，未连接账号"><img src="docs/zh/preferences-2-zh-dark.png" width="310" alt="原生菜单栏内容与顺序设置"></p>
 
 图片为 2× 原生 AppKit 离屏渲染，使用虚构演示数据或明确标示的失败状态，不是真实账号用量。已登录账号返回、Keychain 及通知送达尚未实测。
+<p align="center"><img src="docs/zh/preferences-0-zh-light.png" width="310" alt="今日与此前七个 UTC 日均值"><img src="docs/zh/preferences-1-zh-dark.png" width="310" alt="服务端与本机 CLI 数据状态"></p>
+<p align="center"><img src="docs/zh/preferences-3-zh-light.png" width="310" alt="估算费用阈值与通知频率"></p>
+
 
 ## 1.11.1 更新了什么
 
@@ -47,7 +50,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 [下载 v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [完整更新日志](CHANGELOG.md)
 
-下方图片由 **1.11.1** 源码构建的 App 在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。此次仅修改诊断截图的分辨率，不改变应用界面。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
+下方图片由这个**未正式发布的 1.12.0 build 20 候选版**在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染；不代表 v1.11.1 下载包的界面。[复现方法与验证记录](docs/SCREENSHOTS.md)。
 
 > **Apple silicon：** 建议用 Apple 芯片版 Homebrew 安装原生 **arm64** `tokens` CLI（`brew install owo-network/brew/tokens`）。仅支持 Intel 的 CLI 需要 Rosetta 才能运行；TokensBar 优先选择可用的原生安装，无法启动时会显示原因，而不是只说「提交失败」。
 

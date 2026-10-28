@@ -34,3 +34,14 @@ The earlier [2026-10-27 run](https://github.com/lucaisgrowing/tokens-menubar/act
 ## 中文说明
 
 这 14 张图片由 1.11.1 源码构建的 App 在 macOS 上以 2× 分辨率原生离屏渲染，使用虚构的 `demo-user` API／CLI 数据。截图模式使用固定底色代替实际弹层材质；它不是桌面截图，也不代替真实账号、钥匙串、CLI 和界面交互的人工验收。贡献图在滚动年份靠近月初时，前两个标签可能重叠，这是原界面的布局问题，不是图片放大造成的。
+
+
+## Unreleased 1.12.0 build 20 candidate
+
+The candidate README images were refreshed from the exact universal App produced by [macOS run 40668113754](https://github.com/lucaisgrowing/tokens-menubar/actions/runs/40668113754), source `e685551dceedc970c8b1c892c61da57f9214789e`. They supersede the released-version image provenance above only on the isolated candidate branch.
+
+- `docs/menu*.png` and their Chinese counterparts are 720×1492; Agent windows are 1800×1880; Usage & display panes are 920×1100. All are 2× native AppKit offscreen renders, not an image upscaling.
+- `Tools/render-readme-snapshots.sh` uses a loopback fixture server and temporary demo CLI. `--agent-diagnostics` and `--preferences-diagnostics` use synthetic fixtures and labelled disabled/error/demo states. They never connect personal accounts or send notifications.
+- All four preferences panes, both main panel appearances and both automatic-connection appearances in English/Chinese were visually reviewed. Text fits without overlapping; long Agent content intentionally scrolls. The new screenshots are copied without pixel edits. Normal macOS controls may appear neutral in offscreen rendering; the existing panel's deep-green accent remains checked by the native contrast tests.
+- The trends illustration is a deterministic example, not a current account statement. No authenticated Codex/Claude/Muse Code usage, real Keychain/OpenRouter behavior or notification banner delivery is verified.
+- App ZIP SHA256: `8cb9dc70836ad9e874ca6ad39f45f927abbdf36ef720ee4f6680640b092a354a`. Binary SHA256: `20ff3c2468f2db3ca47ba065f77a87c35160f9f93bbe16bc10895c98facdac18`.

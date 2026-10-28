@@ -31,6 +31,9 @@ It also adds a compact Usage & display window: truthful today/7-day comparisons,
 
 <p align="center"><img src="docs/agent-automatic-en-light.png" width="420" alt="Actual native automatic-connector setup screen; no accounts connected"><img src="docs/preferences-2-en-dark.png" width="310" alt="Native editable menu-bar composition and order"></p>
 
+<p align="center"><img src="docs/preferences-0-en-light.png" width="310" alt="Today versus the previous seven UTC days"><img src="docs/preferences-1-en-dark.png" width="310" alt="Fetch and local CLI data health"></p>
+<p align="center"><img src="docs/preferences-3-en-light.png" width="310" alt="Estimated cost thresholds and notification frequency"></p>
+
 These 2× native AppKit offscreen renders use synthetic fixtures and explicit failure/demo states, not connected account values. Authenticated account results, Keychain and notification delivery are not verified.
 
 ## What's new in 1.11.1
@@ -47,7 +50,7 @@ The following improvements from 1.11.0 are retained:
 
 [Download v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [Full changelog](CHANGELOG.md)
 
-The README images below are 2× native AppKit offscreen renders of a **1.11.1** source build on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The snapshot-only change increases render resolution without changing the app interface. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
+The README images below are 2× native AppKit offscreen renders of this **unreleased 1.12.0 build 20 candidate** on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. They do not show the published v1.11.1 download. [Reproduction and verification](docs/SCREENSHOTS.md).
 
 > **Apple silicon:** use a native **arm64** `tokens` CLI, installed through Apple silicon Homebrew (`brew install owo-network/brew/tokens`). An Intel-only CLI needs Rosetta to run; TokensBar prefers a native installation when available and reports an unlaunchable CLI rather than a bare "submit failed".
 
@@ -171,7 +174,7 @@ cd tokens-menubar
 open TokensBar.app
 ```
 
-The app is an `LSUIElement`: menu bar only, no Dock icon and no windows.
+The app is an `LSUIElement`: no Dock icon. The menu-bar panel remains the main entrance; Agent usage and Usage & display open native utility windows.
 
 The icon lives at `Resources/AppIcon.icns` and is committed. It is drawn in code — edit `Tools/make-icon.swift` and run `swift Tools/make-icon.swift` to regenerate it.
 
