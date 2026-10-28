@@ -2024,7 +2024,7 @@ if CommandLine.arguments.contains("--submit") {
 }
 if let i = CommandLine.arguments.firstIndex(of: "--agent-diagnostics"), CommandLine.arguments.count > i + 1 {
     _ = NSApplication.shared
-    applyLanguage(Config())
+    applyLanguage(Config(username: "demo-user"))
     do {
         try AgentUsageWindow.renderDiagnostics(to: CommandLine.arguments[i + 1], dark: CommandLine.arguments.contains("dark"), catalog: CommandLine.arguments.contains("catalog"))
         exit(0)
