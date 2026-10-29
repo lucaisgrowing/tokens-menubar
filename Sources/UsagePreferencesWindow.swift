@@ -77,8 +77,7 @@ final class UsagePreferencesWindow: NSObject {
     static let shared = UsagePreferencesWindow()
     private var window: NSWindow?
     private var stack: NSStackView?
-    private var tabs: NSSegmentedControl?
-    private var snapshot: PreferencesSnapshot?
+        private var snapshot: PreferencesSnapshot?
     private var chosenTab = 0
     private var order: [String] = []
     private var enabled: Set<String> = []
@@ -100,85 +99,173 @@ final class UsagePreferencesWindow: NSObject {
     }
     func update(_ value: PreferencesSnapshot) { snapshot = value; if window?.isVisible == true && chosenTab < 2 { configure() } }
     private func label(_ text: String, size: CGFloat = 12, weight: NSFont.Weight = .regular, secondary: Bool = false) -> NSTextField {
-        let l = NSTextField(wrappingLabelWithString: text); l.font = .systemFont(ofSize: size, weight: weight); l.textColor = secondary ? .secondaryLabelColor : .labelColor; l.maximumNumberOfLines = 0; return l
+        let l = NSTextField(wrappingLabelWithString: text)
+        l.font = .systemFont(ofSize: size, weight: weight)
+        l.textColor = secondary ? .secondaryLabelColor : .labelColor
+        l.maximumNumberOfLines = 0
+        l.setContentCompressionResistancePriority(.required, for: .vertical)
+        return l
     }
-    private func button(_ text: String, _ selector: Selector, tag: Int = 0) -> NSButton {
-        let b = NSButton(title: text, target: self, action: selector); b.bezelStyle = .rounded; b.tag = tag; b.contentTintColor = tokensAccentInk; return b
+    private func button(_ text: String, _ selector: Selector, tag: Int = 0, primary: Bool = false) -> NSButton {
+        let b = UsageButton(title: text, target: self, action: selector)
+        b.bezelStyle = .rounded; b.isBordered = false; b.tag = tag; b.primary = primary
+        b.heightAnchor.constraint(equalToConstant: 29).isActive = true
+        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
+        return b
     }
     private func configure() {
         guard let window, let snapshot else { return }
-        let root = NSView(); root.wantsLayer = true; root.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor; window.contentView = root
-        let title = label(agentText("Make it yours", "让用量一目了然"), size: 22, weight: .bold)
-        let subtitle = label(agentText("Your data, clear boundaries. Your menu bar, your way.", "看清数据口径，按自己的习惯显示。"), secondary: true)
-        let tabs = NSSegmentedControl(labels: [agentText("Trends", "趋势"), agentText("Data health", "数据状态"), agentText("Menu bar", "菜单栏"), agentText("Alerts", "提醒")], trackingMode: .selectOne, target: self, action: #selector(tabChanged(_:)))
-        tabs.selectedSegment = chosenTab; self.tabs = tabs
-        let body = NSStackView(); body.orientation = .vertical; body.alignment = .leading; body.spacing = 14; self.stack = body
-        let scroll = NSScrollView(); scroll.drawsBackground = false; scroll.hasVerticalScroller = true
+        let root = NSView(); window.contentView = root
+        let title = label(agentText("Usage & display", "用量与显示"), size: 18, weight: .semibold)
+        let subtitle = label(agentText("A clearer view of your usage. A menu bar that fits.", "看清用量，按自己的习惯显示。"), secondary: true)
+        let names = [agentText("Trends", "趋势"), agentText("Data health", "数据状态"), agentText("Menu bar", "菜单栏"), agentText("Alerts", "提醒")]
+        let navigation = NSStackView(); navigation.orientation = .horizontal; navigation.spacing = 5; navigation.distribution = .fillEqually
+        for (i, name) in names.enumerated() {
+            let b = button(name, #selector(navigationChanged(_:)), tag: i) as! UsageButton
+            b.navigation = true; b.state = chosenTab == i ? .on : .off
+            b.setAccessibilityLabel(name); b.setAccessibilityValue(chosenTab == i ? agentText("Selected", "已选择") : agentText("Not selected", "未选择"))
+            navigation.addArrangedSubview(b)
+        }
+        let body = NSStackView(); body.orientation = .vertical; body.alignment = .leading; body.spacing = 12; self.stack = body
+        let scroll = NSScrollView(); scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         let doc = UsageFlippedDocument(); scroll.documentView = doc; body.translatesAutoresizingMaskIntoConstraints = false; doc.addSubview(body)
-        for view in [title, subtitle, tabs, scroll] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+        for view in [title, subtitle, navigation, scroll] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
         doc.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22), title.topAnchor.constraint(equalTo: root.topAnchor, constant: 22),
-            subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor), subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 7), subtitle.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -22),
-            tabs.leadingAnchor.constraint(equalTo: title.leadingAnchor), tabs.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -22), tabs.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 18),
-            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22), scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -22), scroll.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 20), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -18),
-            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor), body.leadingAnchor.constraint(equalTo: doc.leadingAnchor), body.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8), body.topAnchor.constraint(equalTo: doc.topAnchor), body.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -10)])
+            title.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22), title.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor), subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 5), subtitle.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -22),
+            navigation.leadingAnchor.constraint(equalTo: title.leadingAnchor), navigation.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -22), navigation.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 15),
+            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22), scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18), scroll.topAnchor.constraint(equalTo: navigation.bottomAnchor, constant: 16), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor), body.leadingAnchor.constraint(equalTo: doc.leadingAnchor), body.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -4), body.topAnchor.constraint(equalTo: doc.topAnchor), body.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -8)])
         switch chosenTab { case 0: trends(snapshot); case 1: health(snapshot); case 2: display(snapshot); default: alerts(snapshot) }
     }
-    private func add(_ text: String, size: CGFloat = 12, weight: NSFont.Weight = .regular, secondary: Bool = false) { guard let stack else { return }; let l = label(text, size: size, weight: weight, secondary: secondary); stack.addArrangedSubview(l); l.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
-    private func heading(_ text: String) { add(text, size: 13, weight: .semibold) }
-    private func stamp(_ date: Date?) -> String { guard let date else { return agentText("not yet", "尚无") }; let f = DateFormatter(); f.dateFormat = "MM-dd HH:mm:ss z"; return f.string(from: date) }
+    private func add(_ text: String, size: CGFloat = 12, weight: NSFont.Weight = .regular, secondary: Bool = false) {
+        guard let stack else { return }; let l = label(text, size: size, weight: weight, secondary: secondary)
+        stack.addArrangedSubview(l); l.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+    private func heading(_ text: String) { add(text, size: 12, weight: .semibold) }
+    private func card(accented: Bool = false, _ content: () -> Void) {
+        guard let outer = stack else { return }
+        let surface = UsageSurface(); surface.accented = accented
+        let inner = NSStackView(); inner.orientation = .vertical; inner.alignment = .leading; inner.spacing = 9
+        inner.translatesAutoresizingMaskIntoConstraints = false; surface.addSubview(inner)
+        outer.addArrangedSubview(surface)
+        NSLayoutConstraint.activate([surface.widthAnchor.constraint(equalTo: outer.widthAnchor),
+            inner.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: 14), inner.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -14),
+            inner.topAnchor.constraint(equalTo: surface.topAnchor, constant: 14), inner.bottomAnchor.constraint(equalTo: surface.bottomAnchor, constant: -14)])
+        stack = inner; content(); stack = outer
+    }
+    private func row(_ views: [NSView]) {
+        guard let stack else { return }
+        let row = NSStackView(views: views); row.orientation = .horizontal; row.spacing = 8; row.alignment = .centerY
+        stack.addArrangedSubview(row); row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+    private func stamp(_ date: Date?) -> String {
+        guard let date else { return agentText("Not yet", "尚无") }; let f = DateFormatter(); f.dateFormat = "MM-dd HH:mm z"; return f.string(from: date)
+    }
+    private func timestamp(_ title: String, _ date: Date?) {
+        let key = label(title, size: 11, secondary: true), value = label(stamp(date), size: 11, secondary: true)
+        value.alignment = .right; value.setContentCompressionResistancePriority(.required, for: .horizontal)
+        row([key, NSView(), value])
+    }
     private func trends(_ s: PreferencesSnapshot) {
-        heading(agentText("Today vs. the previous 7 days", "今日与此前 7 日均值"))
-        if let c = s.comparison {
-            add(c.changePercent.map { String(format: "%+.1f%%", $0) } ?? agentText("No percentage baseline", "基准为零，无法计算百分比"), size: 30, weight: .semibold)
-            add(agentText("Today ", "今日 ") + fmtTokens(s.todayTokens ?? 0) + agentText(" · daily mean ", " · 日均 ") + fmtTokens(Int(c.mean.rounded())))
-            if let name = c.topModel, let delta = c.topModelDelta { heading(agentText("Largest model contribution to the change", "对变化贡献最大的模型")); add(name + String(format: " · %+.0f token", delta)); add(agentText("Versus that model’s previous seven-day daily mean; not a causal explanation.", "相对此模型前 7 日均值的差额；不推断使用变化的原因。"), secondary: true) }
-            else { add(agentText("Per-day model detail is incomplete or unchanged; no model attribution is made.", "每日模型明细不足或没有变化，不归因到具体模型。"), secondary: true) }
-        } else { add(agentText("Not enough matching submitted data", "同口径已提交数据不足"), size: 20, weight: .semibold); add(agentText("Requires today plus each of the previous seven UTC days. Missing records are not counted as zero. A local scan is never compared with the all-device average.", "需要今日及此前每个 UTC 日的记录；缺失不算零。本机扫描不会与全设备均值混比。"), secondary: true) }
-        add(agentText("UTC calendar days · tokens.ci submitted activity across devices. Today is still in progress and reflects only the last submission, not a final daily total. Token change, not billing change.", "UTC 自然日 · tokens.ci 全设备已提交活动。今日尚未结束，数值截至最近提交，不是最终日总量；这是 token 变化，不是账单变化。"), secondary: true)
-        add(agentText("Submitted: ", "服务端提交：") + stamp(s.submitted), secondary: true)
+        card(accented: true) {
+            heading(agentText("Today vs. previous 7-day mean", "今日与此前 7 日均值"))
+            if let c = s.comparison {
+                let hero = label(c.changePercent.map { String(format: "%+.1f%%", $0) } ?? agentText("No percentage baseline", "基准为零，无法计算百分比"), size: c.changePercent == nil ? 18 : 30, weight: .semibold)
+                hero.textColor = tokensAccentInk; stack?.addArrangedSubview(hero)
+                row([label(agentText("Today  ", "今日  ") + fmtTokens(s.todayTokens ?? 0), weight: .medium), NSView(), label(agentText("7-day mean  ", "7 日日均  ") + fmtTokens(Int(c.mean.rounded())), secondary: true)])
+                add(agentText("UTC day in progress · latest submitted activity", "UTC 今日尚未结束 · 截至最近提交"), size: 11, secondary: true)
+            } else {
+                add(agentText("Not enough matching data", "同口径数据不足"), size: 19, weight: .medium)
+                add(agentText("Today plus each preceding UTC day is required. Missing records are not zero; local scans are not compared with all-device data.", "需要今日及此前 7 个 UTC 日记录；缺失不算零，本机扫描不与全设备均值混比。"), secondary: true)
+            }
+        }
+        card {
+            heading(agentText("Largest model contribution", "变化最多的模型"))
+            if let c = s.comparison, let name = c.topModel, let delta = c.topModelDelta {
+                let value = label(String(format: "%+.0f token", delta), weight: .medium); value.textColor = tokensAccentInk
+                row([label(name, weight: .medium), NSView(), value])
+                add(agentText("Difference from this model’s previous 7-day daily mean—not an explanation of why usage changed.", "相对此模型前 7 日日均的差额，不代表使用变化的原因。"), size: 11, secondary: true)
+            } else { add(agentText("Daily model detail is incomplete or unchanged; no model attribution.", "每日模型明细不足或没有变化，不归因到具体模型。"), secondary: true) }
+        }
+        add(agentText("Scope · tokens.ci submitted activity across devices, by UTC calendar day. Token change, not a bill or a final daily total.", "统计口径 · tokens.ci 全设备已提交活动，按 UTC 自然日计算。这是 token 变化，不是账单或最终日总量。"), size: 11, secondary: true)
+        timestamp(agentText("Server submission", "服务端提交"), s.submitted)
     }
     private func health(_ s: PreferencesSnapshot) {
-        heading(agentText("tokens.ci", "tokens.ci 服务端"))
-        add(s.loading ? agentText("Refreshing…", "正在刷新…") : s.serverError ?? (s.hasServer ? agentText("No refresh error reported", "当前无刷新错误") : agentText("Waiting for the first successful fetch", "等待首次成功读取")), weight: .medium)
-        add(agentText("Last attempt: ", "最近尝试：") + stamp(s.serverAttempt) + "\n" + agentText("Last successful fetch: ", "成功读取：") + stamp(s.serverFetched) + "\n" + agentText("Server submission: ", "服务端提交：") + stamp(s.submitted), secondary: true)
-        if let d = s.submitted, Date().timeIntervalSince(d) > 86400 { add(agentText("No recent submission in over 24 hours. Refreshing reads the server; it does not upload local activity.", "服务端已超过 24 小时未提交。刷新只读取服务器，不会上传本机活动。"), weight: .medium) }
-        let row = NSStackView(views: [button(agentText("Retry refresh", "重试刷新"), #selector(refresh)), button(agentText("Submit local activity", "提交本机活动"), #selector(submit))]); row.spacing = 8; row.views.last?.isHidden = s.cliPath == nil; stack?.addArrangedSubview(row)
-        if s.serverError != nil { stack?.addArrangedSubview(button(agentText("Read token settings…", "读取令牌设置…"), #selector(readToken))) }
-        heading(agentText("This Mac · tokens CLI", "此 Mac · tokens CLI"))
-        add(s.localError ?? (s.cliPath == nil ? agentText("CLI not found", "未找到 CLI") : s.localFailed ? agentText("Today’s CLI scan failed; prior values are retained", "今日 CLI 扫描失败，保留旧数值") : agentText("Today’s local scan is available", "今日本机扫描可用")), weight: .medium)
-        add(agentText("Last attempt: ", "最近尝试：") + stamp(s.localAttempt) + "\n" + agentText("Today’s last successful scan: ", "今日成功扫描：") + stamp(s.localSuccess), secondary: true)
-        add(agentText("If installed but unable to run, check the CLI’s architecture/version and its own login in Terminal. TokensBar never silently reinstalls it or submits on refresh.", "若已安装但无法运行，请在终端检查 CLI 架构、版本及其登录。TokensBar 不会静默重装；刷新也不等于提交。"), secondary: true)
-        stack?.addArrangedSubview(button(agentText("Official CLI setup", "官方 CLI 安装说明"), #selector(cliHelp)))
+        card {
+            heading(agentText("tokens.ci · server", "tokens.ci · 服务端"))
+            add(s.loading ? agentText("Refreshing…", "正在刷新…") : s.serverError ?? (s.hasServer ? agentText("No refresh error reported", "当前无刷新错误") : agentText("Waiting for the first successful fetch", "等待首次成功读取")), weight: .medium)
+            timestamp(agentText("Last attempt", "最近尝试"), s.serverAttempt)
+            timestamp(agentText("Successful fetch", "成功读取"), s.serverFetched)
+            timestamp(agentText("Server submission", "服务端提交"), s.submitted)
+            if let d = s.submitted, Date().timeIntervalSince(d) > 86400 {
+                add(agentText("No submission in 24h. Refresh reads the server; it does not upload activity.", "超过 24 小时未提交；刷新只读取服务端，不会上传活动。"), size: 11, secondary: true)
+            }
+            let retry = button(agentText("Retry refresh", "重试刷新"), #selector(refresh), primary: true); retry.isEnabled = !s.loading
+            var actions: [NSView] = [retry]
+            if s.cliPath != nil { actions.append(button(agentText("Submit activity", "提交本机活动"), #selector(submit))) }
+            if s.serverError != nil { actions.append(button(agentText("Read token…", "读取令牌…"), #selector(readToken))) }
+            actions.append(NSView()); row(actions)
+        }
+        card {
+            heading(agentText("This Mac · tokens CLI", "此 Mac · tokens CLI"))
+            add(s.localError ?? (s.cliPath == nil ? agentText("CLI not found", "未找到 CLI") : s.localFailed ? agentText("Scan failed; previous values retained", "扫描失败，保留旧数值") : agentText("Today’s local scan is available", "今日本机扫描可用")), weight: .medium)
+            timestamp(agentText("Last attempt", "最近尝试"), s.localAttempt)
+            timestamp(agentText("Today’s successful scan", "今日成功扫描"), s.localSuccess)
+            add(agentText("Check the CLI’s architecture, version and login in Terminal. No silent reinstall; refreshing never submits activity.", "请在终端检查 CLI 架构、版本及登录。不会静默重装，刷新也不等于提交。"), size: 11, secondary: true)
+            stack?.addArrangedSubview(button(agentText("Official CLI setup", "官方 CLI 安装说明"), #selector(cliHelp)))
+        }
     }
     private func display(_ s: PreferencesSnapshot) {
         order = validMenuItems(s.config.menuBarItems) + ["tokens", "cost", "rank"].filter { !s.config.menuBarItems.contains($0) }; enabled = Set(s.config.menuBarItems)
-        heading(agentText("Show and arrange", "选择内容与顺序")); add(agentText("Changes apply immediately and are remembered on this Mac. Keep at least one item.", "立即生效，并在此 Mac 记住；至少保留一项。"), secondary: true)
-        for (i, name) in order.enumerated() {
-            let title = name == "tokens" ? agentText("Today’s tokens", "今日 token") : name == "cost" ? agentText("Estimated spend", "估算费用") : agentText("Leaderboard rank", "排名")
-            let check = NSButton(checkboxWithTitle: title, target: self, action: #selector(toggle(_:))); check.tag = i; check.state = enabled.contains(name) ? .on : .off
-            let up = button("↑", #selector(move(_:)), tag: i * 2); up.isEnabled = i > 0; up.setAccessibilityLabel(agentText("Move \(title) up", "上移\(title)"))
-            let down = button("↓", #selector(move(_:)), tag: i * 2 + 1); down.isEnabled = i < 2; down.setAccessibilityLabel(agentText("Move \(title) down", "下移\(title)"))
-            let row = NSStackView(views: [check, NSView(), up, down]); row.spacing = 7; stack?.addArrangedSubview(row); row.widthAnchor.constraint(equalTo: stack!.widthAnchor).isActive = true
+        card(accented: true) {
+            heading(agentText("Menu-bar preview", "菜单栏预览"))
+            let parts = order.filter { enabled.contains($0) }.map { key in
+                key == "tokens" ? fmtTokens(s.todayTokens ?? 0) : key == "cost" ? "≈$—" : "#—"
+            }
+            add(parts.joined(separator: "   ·   "), size: 20, weight: .medium)
+            add(agentText("Layout preview. Cost and rank are placeholders, not account values.", "仅预览组合与顺序；费用与排名为占位，不是账号数值。"), size: 11, secondary: true)
         }
-        add(agentText("Rank still follows the existing Today / All-time setting. Estimated cost is never presented as the subscription’s remaining allowance.", "排名沿用已有的今日／累计设置；估算费用不当作订阅剩余额度。"), secondary: true)
+        card {
+            heading(agentText("Show and arrange", "选择内容与顺序"))
+            for (i, name) in order.enumerated() {
+                let title = name == "tokens" ? agentText("Today’s tokens", "今日 token") : name == "cost" ? agentText("Estimated spend", "估算费用") : agentText("Leaderboard rank", "排名")
+                let check = UsageCheck(checkboxWithTitle: title, target: self, action: #selector(toggle(_:)))
+                check.tag = i; check.state = enabled.contains(name) ? .on : .off
+                check.heightAnchor.constraint(equalToConstant: 30).isActive = true
+                check.widthAnchor.constraint(greaterThanOrEqualToConstant: 170).isActive = true
+                let up = button("↑", #selector(move(_:)), tag: i * 2); up.isEnabled = i > 0; up.setAccessibilityLabel(agentText("Move \(title) up", "上移\(title)"))
+                let down = button("↓", #selector(move(_:)), tag: i * 2 + 1); down.isEnabled = i < 2; down.setAccessibilityLabel(agentText("Move \(title) down", "下移\(title)"))
+                row([check, NSView(), up, down])
+            }
+            add(agentText("Saved immediately on this Mac. Keep at least one item enabled.", "调整立即生效并保存在此 Mac，至少保留一项。"), size: 11, secondary: true)
+        }
+        add(agentText("Rank follows the existing Today / All-time setting. Estimated cost is not a subscription’s remaining allowance.", "排名沿用已有的今日／累计设置；估算费用不是订阅剩余额度。"), size: 11, secondary: true)
     }
     private func alerts(_ s: PreferencesSnapshot) {
-        heading(agentText("Estimated cost thresholds · USD", "估算费用阈值 · USD"))
-        add(agentText("Daily threshold also controls amber / red menu-bar colour. Set 0 to turn a threshold off. Month-end projection remains based on this Mac’s local calendar-month pace, not an invoice.", "每日阈值同时控制菜单栏橙／红色提醒；填 0 关闭该阈值。月末预测仍按此 Mac 本地自然月进度估算，不是账单。"), secondary: true)
-        func field(_ title: String, value: Double) -> NSTextField {
-            let f = NSTextField(string: String(format: "%.2f", value)); f.alignment = .right; f.widthAnchor.constraint(equalToConstant: 110).isActive = true; f.setAccessibilityLabel(title)
-            let row = NSStackView(views: [label(title), NSView(), f]); row.spacing = 10; stack?.addArrangedSubview(row); row.widthAnchor.constraint(equalTo: stack!.widthAnchor).isActive = true; return f
+        card {
+            heading(agentText("Estimated cost thresholds · USD", "估算费用阈值 · USD"))
+            func field(_ title: String, value: Double) -> NSTextField {
+                let f = NSTextField(string: String(format: "%.2f", value)); f.alignment = .right; f.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+                f.widthAnchor.constraint(equalToConstant: 100).isActive = true; f.setAccessibilityLabel(title)
+                row([label(title), NSView(), f]); return f
+            }
+            dailyField = field(agentText("Daily estimate", "每日估算阈值"), value: s.config.dailyCostBudget)
+            monthlyField = field(agentText("Month-end projection", "月末预测阈值"), value: CostNotifications.shared.monthlyThreshold)
+            add(agentText("0 disables a threshold. Daily threshold also controls amber / red menu-bar alerts.", "填 0 关闭对应阈值；每日阈值也控制菜单栏橙／红色提醒。"), size: 11, secondary: true)
         }
-        dailyField = field(agentText("Today’s estimate", "今日估算"), value: s.config.dailyCostBudget)
-        monthlyField = field(agentText("Month-end projection", "月末预测"), value: CostNotifications.shared.monthlyThreshold)
-        let pop = NSPopUpButton(); pop.addItems(withTitles: [agentText("No notifications", "不发通知"), agentText("At most once per UTC day", "每 UTC 日至多一次"), agentText("At most every 6 hours", "至多每 6 小时"), agentText("At most hourly", "至多每小时")]); let intervals: [Double] = [0, 86400, 21600, 3600]; pop.selectItem(at: intervals.firstIndex(of: CostNotifications.shared.interval) ?? 0); frequency = pop
-        heading(agentText("Notification frequency · per threshold", "通知频率 · 每种阈值")); stack?.addArrangedSubview(pop)
-        stack?.addArrangedSubview(button(agentText("Save thresholds", "保存阈值"), #selector(saveAlerts)))
-        let f = label(CostNotifications.shared.status, secondary: true); feedback = f; stack?.addArrangedSubview(f); f.widthAnchor.constraint(equalTo: stack!.widthAnchor).isActive = true
-        CostNotifications.shared.inspectPermission { [weak self] in self?.feedback?.stringValue = CostNotifications.shared.status }
-        add(agentText("Only a successful, recent (≤15 min) observation can trigger an alert. Failed refreshes, unknown values and old snapshots never count as a new spend. Focus can suppress banners.", "仅成功获取且 15 分钟内的数据触发提醒；刷新失败、未知值及旧快照不会当作新费用。专注模式可能隐藏横幅。"), secondary: true)
+        card {
+            heading(agentText("Notifications", "通知"))
+            let pop = NSPopUpButton(); pop.font = .systemFont(ofSize: 12)
+            pop.addItems(withTitles: [agentText("No notifications", "不发通知"), agentText("At most once per UTC day", "每 UTC 日至多一次"), agentText("At most every 6 hours", "至多每 6 小时"), agentText("At most hourly", "至多每小时")])
+            let intervals: [Double] = [0, 86400, 21600, 3600]; pop.selectItem(at: intervals.firstIndex(of: CostNotifications.shared.interval) ?? 0); frequency = pop
+            row([label(agentText("Per threshold", "每种阈值的频率"), secondary: true), NSView(), pop])
+            let f = label(CostNotifications.shared.status, size: 11, secondary: true); feedback = f; stack?.addArrangedSubview(f); f.widthAnchor.constraint(equalTo: stack!.widthAnchor).isActive = true
+            CostNotifications.shared.inspectPermission { [weak self] in self?.feedback?.stringValue = CostNotifications.shared.status }
+        }
+        stack?.addArrangedSubview(button(agentText("Save alert settings", "保存提醒设置"), #selector(saveAlerts), primary: true))
+        add(agentText("Month-end projection uses this Mac’s local calendar-month pace, not a bill. Alerts require a successful observation no older than 15 minutes; failures, unknown values and old snapshots never count as new spend. Focus may hide banners.", "月末预测按此 Mac 本地自然月进度估算，不是账单。仅成功获取且 15 分钟内的数据触发提醒；失败、未知值与旧快照不会当作新费用。专注模式可能隐藏横幅。"), size: 11, secondary: true)
     }
     // Disposable CI controls: no live config, notification prompt or data submission.
     func checkNativeDisplayControls(_ fixture: PreferencesSnapshot) {
@@ -203,10 +290,10 @@ final class UsagePreferencesWindow: NSObject {
         store.removePersistentDomain(forName: domain)
         print("PASS: 4 native display reorder/toggle/last-item/persistence checks")
     }
-    @objc private func tabChanged(_ sender: NSSegmentedControl) { chosenTab = sender.selectedSegment; configure() }
+    @objc private func navigationChanged(_ sender: NSButton) { chosenTab = sender.tag; configure() }
     @objc private func toggle(_ sender: NSButton) {
         let key = order[sender.tag]; if sender.state == .on { enabled.insert(key) } else { enabled.remove(key) }
-        if enabled.isEmpty { enabled.insert(key); sender.state = .on; NSSound.beep(); return }; applyDisplay()
+        if enabled.isEmpty { enabled.insert(key); sender.state = .on; NSSound.beep(); return }; applyDisplay(); configure()
     }
     @objc private func move(_ sender: NSButton) { let i = sender.tag / 2, j = i + (sender.tag % 2 == 0 ? -1 : 1); guard order.indices.contains(j) else { return }; order.swapAt(i, j); applyDisplay(); configure() }
     private func applyDisplay() { guard var s = snapshot else { return }; s.config.menuBarItems = order.filter { enabled.contains($0) }; snapshot = s; onChange?(s.config.menuBarItems, s.config.dailyCostBudget) }
