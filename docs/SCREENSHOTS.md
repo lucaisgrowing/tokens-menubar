@@ -36,12 +36,12 @@ The earlier [2026-10-27 run](https://github.com/lucaisgrowing/tokens-menubar/act
 这 14 张图片由 1.11.1 源码构建的 App 在 macOS 上以 2× 分辨率原生离屏渲染，使用虚构的 `demo-user` API／CLI 数据。截图模式使用固定底色代替实际弹层材质；它不是桌面截图，也不代替真实账号、钥匙串、CLI 和界面交互的人工验收。贡献图在滚动年份靠近月初时，前两个标签可能重叠，这是原界面的布局问题，不是图片放大造成的。
 
 
-## Unreleased 1.12.0 build 20 candidate
+## Unreleased 1.12.0 build 21 candidate
 
-The candidate README images were refreshed from the exact universal App produced by [macOS run 40668113754](https://github.com/lucaisgrowing/tokens-menubar/actions/runs/40668113754), source `e685551dceedc970c8b1c892c61da57f9214789e`. They supersede the released-version image provenance above only on the isolated candidate branch.
+The four Usage & display pane images in both languages and appearances were refreshed from the exact universal App produced by [macOS run 40797769460](https://github.com/lucaisgrowing/tokens-menubar/actions/runs/40797769460), source `cb846e2`. They supersede the released-version image provenance above only on the isolated candidate branch.
 
-- `docs/menu*.png` and their Chinese counterparts are 720×1492; Agent windows are 1400×1440; Usage & display panes are 920×1100. All are 2× native AppKit offscreen renders, not an image upscaling.
+- Main/Agent images remain from build 20 (run 40668113754), visually unchanged by this preference-only refinement. `docs/menu*.png` and their Chinese counterparts are 720×1492; Agent windows are 1400×1440; the updated Usage & display panes are 920×1100. All are 2× native AppKit offscreen renders, not an image upscaling.
 - `Tools/render-readme-snapshots.sh` uses a loopback fixture server and temporary demo CLI. `--agent-diagnostics` and `--preferences-diagnostics` use synthetic fixtures and labelled disabled/error/demo states. They never connect personal accounts or send notifications.
-- All four preferences panes, both main panel appearances and both automatic-connection appearances in English/Chinese were visually reviewed. Text fits without overlapping; long Agent content intentionally scrolls. The new screenshots are copied without pixel edits. Normal macOS controls may appear neutral in offscreen rendering; the existing panel's deep-green accent remains checked by the native contrast tests.
+- All four preferences panes, both main panel appearances and both automatic-connection appearances in English/Chinese were visually reviewed. Text fits without overlapping; long Agent content intentionally scrolls. The new screenshots are copied without pixel edits. The four preference panes use fixed ink-green custom tab, action and checkbox drawing, with appearance-specific opaque surfaces; native popup menus remain native. Button foreground/background contrast is at least 4.5:1 in both appearances, checked with a blue system accent preference.
 - The trends illustration is a deterministic example, not a current account statement. No authenticated Codex/Claude/Muse Code usage, real Keychain/OpenRouter behavior or notification banner delivery is verified.
-- App ZIP SHA256: `8cb9dc70836ad9e874ca6ad39f45f927abbdf36ef720ee4f6680640b092a354a`. Binary SHA256: `20ff3c2468f2db3ca47ba065f77a87c35160f9f93bbe16bc10895c98facdac18`.
+- App ZIP SHA256: `8c21ecd969150cc109804c445a423045f7a9b5f5329335a3eaa3233c3e3a321f`. Binary SHA256: `b112c6a34bfd2d006b2670e799a966e3a85fbf5c9766581c854f1c77eeadb379`.

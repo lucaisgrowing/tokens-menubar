@@ -42,6 +42,8 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 <p align="center"><img src="docs/zh/preferences-0-zh-light.png" width="310" alt="今日与此前七个 UTC 日均值"><img src="docs/zh/preferences-1-zh-dark.png" width="310" alt="服务端与本机 CLI 数据状态"></p>
 <p align="center"><img src="docs/zh/preferences-3-zh-light.png" width="310" alt="估算费用阈值与通知频率"></p>
 
+[逐页检查与改动](docs/UI-REVIEW.zh-CN.md) · [截图来源](docs/SCREENSHOTS.md)
+
 
 ## 1.11.1 更新了什么
 

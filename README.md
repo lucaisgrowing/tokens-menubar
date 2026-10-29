@@ -41,6 +41,8 @@ No new release or main merge; the v1.11.1 download does not include this candida
 <p align="center"><img src="docs/preferences-0-en-light.png" width="310" alt="Today versus the previous seven UTC days"><img src="docs/preferences-1-en-dark.png" width="310" alt="Fetch and local CLI data health"></p>
 <p align="center"><img src="docs/preferences-3-en-light.png" width="310" alt="Estimated cost thresholds and notification frequency"></p>
 
+[Four-pane UI review](docs/UI-REVIEW.zh-CN.md) · [Screenshot provenance](docs/SCREENSHOTS.md)
+
 These 2× native AppKit offscreen renders use synthetic fixtures and explicit failure/demo states, not connected account values. Authenticated account results, Keychain and notification delivery are not verified.
 
 ## What's new in 1.11.1
