@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.12.0 candidate — unreleased, build 20
+## 1.12.0 candidate — unreleased, build 21
+
+### Preferences visual polish
+- Replace neutral gray navigation, checkboxes and actions in the four new panes with consistent ink-green controls, clear selection/press/focus states and opaque appearance-aware surfaces. Keep the existing macOS font family and unchanged main panel.
+- Give the trend comparison a distinct summary and model-contribution card; retain UTC, incomplete-day and model-attribution qualifications at a quieter visual level.
+- Group server and local CLI diagnostics separately, align timestamps, collect related actions and disable refresh while loading. Do not imply a retry uploads activity.
+- Add a menu-bar composition preview with unknown cost/rank explicitly shown as placeholders, green toggles and reorder controls. Preserve immediate saving and the final-enabled-item safeguard.
+- Separate cost thresholds from notification cadence; emphasize saving, retain validation and distinguish OS notification authorization from delivered banners.
+- Refresh native 2× screenshots in both README languages after visual review of all four panes in light and dark appearances.
+
+### Existing candidate changes
 
 - Replace manual-entry-as-automation framing with opt-in supported local paths: Codex app-server account rate-limit/activity reads, Claude Code statusLine sanitized quota observations, and clearly separate Muse Code cached usage/read (not Meta Muse personal agent). Keep tokens.ci submitted scope and OpenRouter per-key scope separate. No cookie scraping, account-key minting or model turn.
 - Add strict today/prior-seven UTC-day comparison; missing days are unknown, not zero. Attribute a model only from complete per-day detail; preserve existing main-panel order.

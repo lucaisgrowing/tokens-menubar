@@ -27,7 +27,14 @@ Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond sy
 
 This candidate adds opt-in official local Codex quota reads and a Claude Code statusLine bridge, alongside submitted tokens.ci client data and optional OpenRouter per-key data. Muse Code cached reads are experimental here and are not the Muse personal agent. Meta Muse, Grok Bot, Cue and Wabi personal quotas are **not automatically connected**; the 67-entry reference catalog is not an integration count. Manual snapshots remain optional, not the automation solution.
 
-It also adds a compact Usage & display window: truthful today/7-day comparisons, separate fetch/submission/CLI health, estimated-cost thresholds and notification frequency, and editable/persistent menu-bar order. Existing panel layout, fonts and green accent remain. No new release or main merge; the v1.11.1 download does not include this candidate. See [sources, setup, tests and limits](docs/AGENT-USAGE.md).
+It also adds a compact Usage & display window: truthful today/7-day comparisons, separate fetch/submission/CLI health, estimated-cost thresholds and notification frequency, and editable/persistent menu-bar order. Existing panel layout, fonts and green accent remain. Build 21 refines these four panes:
+
+- Trends: an ink-green summary, side-by-side today/mean values, separate model contribution and scope notes.
+- Data health: separate server/local cards with aligned attempt, success and submission rows, and contextual actions.
+- Menu bar: a live composition preview, green check/order controls and at-least-one-item protection.
+- Alerts: grouped thresholds and notification settings, an emphasized save action, and clear estimate/freshness/permission limits.
+
+No new release or main merge; the v1.11.1 download does not include this candidate. See [sources, setup, tests and limits](docs/AGENT-USAGE.md).
 
 <p align="center"><img src="docs/agent-automatic-en-light.png" width="420" alt="Actual native automatic-connector setup screen; no accounts connected"><img src="docs/preferences-2-en-dark.png" width="310" alt="Native editable menu-bar composition and order"></p>
 
@@ -50,7 +57,7 @@ The following improvements from 1.11.0 are retained:
 
 [Download v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [Full changelog](CHANGELOG.md)
 
-The README images below are 2× native AppKit offscreen renders of this **unreleased 1.12.0 build 20 candidate** on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. They do not show the published v1.11.1 download. [Reproduction and verification](docs/SCREENSHOTS.md).
+The README images below are 2× native AppKit offscreen renders of this **unreleased 1.12.0 build 21 candidate** on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. They do not show the published v1.11.1 download. [Reproduction and verification](docs/SCREENSHOTS.md).
 
 > **Apple silicon:** use a native **arm64** `tokens` CLI, installed through Apple silicon Homebrew (`brew install owo-network/brew/tokens`). An Intel-only CLI needs Rosetta to run; TokensBar prefers a native installation when available and reports an unlaunchable CLI rather than a bare "submit failed".
 

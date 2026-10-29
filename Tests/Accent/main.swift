@@ -30,4 +30,11 @@ for (name, bytes) in [(NSAppearance.Name.aqua, [46, 103, 107]), (.darkAqua, [66,
         print("\(name.rawValue): button contrast \(contrast(fill, .white)), ink contrast \(contrast(ink, background))")
     }
 }
+for dark in [false, true] {
+    let card = dark ? NSColor(srgbRed: 41/255, green: 46/255, blue: 43/255, alpha: 1) : .white
+    let neutral = dark ? NSColor(srgbRed: 52/255, green: 63/255, blue: 56/255, alpha: 1) : NSColor(srgbRed: 230/255, green: 236/255, blue: 230/255, alpha: 1)
+    expect(contrast(usageGreen(dark), .white) >= 4.5, "Preferences primary button white text")
+    expect(contrast(usageInk(dark), card) >= 4.5, "Preferences small accent text")
+    expect(contrast(usageInk(dark), neutral) >= 4.5, "Preferences secondary button text")
+}
 print("PASS: \(checks) native accent checks with blue system preference")

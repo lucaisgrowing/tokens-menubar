@@ -27,7 +27,14 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 候选版加入可选的官方本机 Codex 额度读取、Claude Code statusLine 桥接，保留 tokens.ci 已提交客户端数据及 OpenRouter 单 key 接口。另有 Muse Code 缓存读取，但它不是 Muse 个人 Agent。Meta Muse、Grok Bot、Cue、Wabi 个人额度**仍未自动接通**；67 项资料目录不等于 67 个集成，手动快照只作可选参考，不再当作自动化方案。
 
-还增加紧凑的「用量与显示」窗口：今日与前七日同口径对比、区分读取/提交/CLI 的数据状态、估算费用阈值与通知频率、可调整并记住的菜单栏组合和顺序。原面板顺序、字体与墨绿风格保留。未合并 main、未发布新 release，v1.11.1 下载包不含此候选版。详见[来源、设置、测试与限制](docs/AGENT-USAGE.md)。
+还增加紧凑的「用量与显示」窗口：今日与前七日同口径对比、区分读取/提交/CLI 的数据状态、估算费用阈值与通知频率、可调整并记住的菜单栏组合和顺序。原面板顺序、字体与墨绿风格保留。 build 21 进一步精修这四页：
+
+- 趋势：墨绿重点卡片突出变化，今日／日均并排；模型差额与统计口径分层。
+- 数据状态：服务端和此 Mac 分卡展示，尝试／成功／提交时间按行对齐，操作集中在对应卡片。
+- 菜单栏：增加即时组合预览，勾选与排序使用墨绿控件，至少保留一项。
+- 提醒：阈值与通知分组，强调保存按钮，保留费用估算、时效和权限说明。
+
+未合并 main、未发布新 release，v1.11.1 下载包不含此候选版。详见[来源、设置、测试与限制](docs/AGENT-USAGE.md)。
 
 <p align="center"><img src="docs/zh/agent-automatic-zh-light.png" width="420" alt="真实原生自动接入设置界面，未连接账号"><img src="docs/zh/preferences-2-zh-dark.png" width="310" alt="原生菜单栏内容与顺序设置"></p>
 
@@ -50,7 +57,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 [下载 v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [完整更新日志](CHANGELOG.md)
 
-下方图片由这个**未正式发布的 1.12.0 build 20 候选版**在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染；不代表 v1.11.1 下载包的界面。[复现方法与验证记录](docs/SCREENSHOTS.md)。
+下方图片由这个**未正式发布的 1.12.0 build 21 候选版**在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染；不代表 v1.11.1 下载包的界面。[复现方法与验证记录](docs/SCREENSHOTS.md)。
 
 > **Apple silicon：** 建议用 Apple 芯片版 Homebrew 安装原生 **arm64** `tokens` CLI（`brew install owo-network/brew/tokens`）。仅支持 Intel 的 CLI 需要 Rosetta 才能运行；TokensBar 优先选择可用的原生安装，无法启动时会显示原因，而不是只说「提交失败」。
 
