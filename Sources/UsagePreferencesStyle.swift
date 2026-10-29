@@ -28,6 +28,10 @@ final class UsageSurface: NSView {
 final class UsageButton: NSButton {
     var primary = false
     var navigation = false
+    override var intrinsicContentSize: NSSize {
+        let text = (title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .semibold)])
+        return NSSize(width: max(34, text.width + 24), height: 29)
+    }
     override func draw(_ dirtyRect: NSRect) {
         let dark = usageDark(self)
         let selected = navigation && state == .on
@@ -57,7 +61,7 @@ final class UsageCheck: NSButton {
         (state == .on ? usageGreen(dark) : usageRGB(dark ? 0x7D8C82 : 0x84998A)).setStroke(); path.lineWidth = 1; path.stroke()
         if state == .on {
             NSColor.white.setStroke(); let tick = NSBezierPath(); tick.lineWidth = 1.7; tick.lineCapStyle = .round; tick.lineJoinStyle = .round
-            tick.move(to: NSPoint(x: box.minX + 4, y: box.midY)); tick.line(to: NSPoint(x: box.minX + 7, y: box.minY + 4)); tick.line(to: NSPoint(x: box.minX + 12, y: box.minY + 11)); tick.stroke()
+            tick.move(to: NSPoint(x: box.minX + 4, y: box.midY)); tick.line(to: NSPoint(x: box.minX + 7, y: box.minY + 11)); tick.line(to: NSPoint(x: box.minX + 12, y: box.minY + 4)); tick.stroke()
         }
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: usageRGB(dark ? 0xF0F3EF : 0x1E2922)]
         let size = (title as NSString).size(withAttributes: attributes)
