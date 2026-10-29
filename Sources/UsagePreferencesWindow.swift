@@ -115,14 +115,14 @@ final class UsagePreferencesWindow: NSObject {
     }
     private func configure() {
         guard let window, let snapshot else { return }
-        let root = NSView(); window.contentView = root
+        let root = UsageCanvas(); window.contentView = root
         let title = label(agentText("Usage & display", "用量与显示"), size: 18, weight: .semibold)
         let subtitle = label(agentText("A clearer view of your usage. A menu bar that fits.", "看清用量，按自己的习惯显示。"), secondary: true)
         let names = [agentText("Trends", "趋势"), agentText("Data health", "数据状态"), agentText("Menu bar", "菜单栏"), agentText("Alerts", "提醒")]
         let navigation = NSStackView(); navigation.orientation = .horizontal; navigation.spacing = 5; navigation.distribution = .fillEqually
         for (i, name) in names.enumerated() {
             let b = button(name, #selector(navigationChanged(_:)), tag: i) as! UsageButton
-            b.navigation = true; b.state = chosenTab == i ? .on : .off
+            b.navigation = true; b.setButtonType(.pushOnPushOff); b.state = chosenTab == i ? .on : .off
             b.setAccessibilityLabel(name); b.setAccessibilityValue(chosenTab == i ? agentText("Selected", "已选择") : agentText("Not selected", "未选择"))
             navigation.addArrangedSubview(b)
         }
@@ -144,10 +144,10 @@ final class UsagePreferencesWindow: NSObject {
         stack.addArrangedSubview(l); l.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
     private func heading(_ text: String) { add(text, size: 12, weight: .semibold) }
-    private func card(accented: Bool = false, _ content: () -> Void) {
+    private func card(accented: Bool = false, spacing: CGFloat = 9, _ content: () -> Void) {
         guard let outer = stack else { return }
         let surface = UsageSurface(); surface.accented = accented
-        let inner = NSStackView(); inner.orientation = .vertical; inner.alignment = .leading; inner.spacing = 9
+        let inner = NSStackView(); inner.orientation = .vertical; inner.alignment = .leading; inner.spacing = spacing
         inner.translatesAutoresizingMaskIntoConstraints = false; surface.addSubview(inner)
         outer.addArrangedSubview(surface)
         NSLayoutConstraint.activate([surface.widthAnchor.constraint(equalTo: outer.widthAnchor),
@@ -173,7 +173,7 @@ final class UsagePreferencesWindow: NSObject {
             heading(agentText("Today vs. previous 7-day mean", "今日与此前 7 日均值"))
             if let c = s.comparison {
                 let hero = label(c.changePercent.map { String(format: "%+.1f%%", $0) } ?? agentText("No percentage baseline", "基准为零，无法计算百分比"), size: c.changePercent == nil ? 18 : 30, weight: .semibold)
-                hero.textColor = tokensAccentInk; stack?.addArrangedSubview(hero)
+                hero.textColor = usageInk(window!.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua); stack?.addArrangedSubview(hero)
                 row([label(agentText("Today  ", "今日  ") + fmtTokens(s.todayTokens ?? 0), weight: .medium), NSView(), label(agentText("7-day mean  ", "7 日日均  ") + fmtTokens(Int(c.mean.rounded())), secondary: true)])
                 add(agentText("UTC day in progress · latest submitted activity", "UTC 今日尚未结束 · 截至最近提交"), size: 11, secondary: true)
             } else {
@@ -184,7 +184,7 @@ final class UsagePreferencesWindow: NSObject {
         card {
             heading(agentText("Largest model contribution", "变化最多的模型"))
             if let c = s.comparison, let name = c.topModel, let delta = c.topModelDelta {
-                let value = label(String(format: "%+.0f token", delta), weight: .medium); value.textColor = tokensAccentInk
+                let value = label(String(format: "%+.0f token", delta), weight: .medium); value.textColor = usageInk(window!.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
                 row([label(name, weight: .medium), NSView(), value])
                 add(agentText("Difference from this model’s previous 7-day daily mean—not an explanation of why usage changed.", "相对此模型前 7 日日均的差额，不代表使用变化的原因。"), size: 11, secondary: true)
             } else { add(agentText("Daily model detail is incomplete or unchanged; no model attribution.", "每日模型明细不足或没有变化，不归因到具体模型。"), secondary: true) }
@@ -193,7 +193,7 @@ final class UsagePreferencesWindow: NSObject {
         timestamp(agentText("Server submission", "服务端提交"), s.submitted)
     }
     private func health(_ s: PreferencesSnapshot) {
-        card {
+        card(spacing: 6) {
             heading(agentText("tokens.ci · server", "tokens.ci · 服务端"))
             add(s.loading ? agentText("Refreshing…", "正在刷新…") : s.serverError ?? (s.hasServer ? agentText("No refresh error reported", "当前无刷新错误") : agentText("Waiting for the first successful fetch", "等待首次成功读取")), weight: .medium)
             timestamp(agentText("Last attempt", "最近尝试"), s.serverAttempt)
@@ -208,7 +208,7 @@ final class UsagePreferencesWindow: NSObject {
             if s.serverError != nil { actions.append(button(agentText("Read token…", "读取令牌…"), #selector(readToken))) }
             actions.append(NSView()); row(actions)
         }
-        card {
+        card(spacing: 6) {
             heading(agentText("This Mac · tokens CLI", "此 Mac · tokens CLI"))
             add(s.localError ?? (s.cliPath == nil ? agentText("CLI not found", "未找到 CLI") : s.localFailed ? agentText("Scan failed; previous values retained", "扫描失败，保留旧数值") : agentText("Today’s local scan is available", "今日本机扫描可用")), weight: .medium)
             timestamp(agentText("Last attempt", "最近尝试"), s.localAttempt)
@@ -222,7 +222,7 @@ final class UsagePreferencesWindow: NSObject {
         card(accented: true) {
             heading(agentText("Menu-bar preview", "菜单栏预览"))
             let parts = order.filter { enabled.contains($0) }.map { key in
-                key == "tokens" ? fmtTokens(s.todayTokens ?? 0) : key == "cost" ? "≈$—" : "#—"
+                key == "tokens" ? (s.todayTokens.map(fmtTokens) ?? "—") : key == "cost" ? "≈$—" : "#—"
             }
             add(parts.joined(separator: "   ·   "), size: 20, weight: .medium)
             add(agentText("Layout preview. Cost and rank are placeholders, not account values.", "仅预览组合与顺序；费用与排名为占位，不是账号数值。"), size: 11, secondary: true)
