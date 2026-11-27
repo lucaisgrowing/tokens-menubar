@@ -23,19 +23,16 @@
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
-## What's new in 1.11.1
+## What's new in 1.12.0
 
-- Restore the original deep-green buttons and highlights, independent of the macOS system accent color; preserve light/dark styling, with more legible small green text in dark mode.
+- **Redesigned UI & macOS AppIcon**: Elevated light/dark card hierarchy, proportional model bars, macOS Settings-style grouped Actions & Settings page, and a new text-free deep obsidian-teal AppIcon.
+- **Live Mini-Leaderboard Ladder**: 3-row race around your rank (rival above, you highlighted, rival below) with percentile badge (`Top XX%`) and 1-click Today / All-time switching.
+- **Animated 7-Day Pace Bar**: Smooth ease-out glide and one-shot highlight sweep on the Today / 7-day average bar (respects Reduce Motion).
+- **In-App Settings & Hot-Reload**: Toggle menu-bar items (`Tokens` / `Cost` / `Rank`) and set your daily USD budget directly from the panel, with live hot-reload for `config.json` and `tokens login`.
+- **Streak, Cache Hit Rate & CLI Checks**: Shows UTC active-day streaks, prompt cache-hit ratio, local `tokens` CLI version / `tokens serve` status, and upstream CLI update alerts.
+- **Reliability & Security**: Fixes `#101`/`#201` page-boundary lookups and the 600-user cap, adds wake & network-recovery refreshes, throttles local CLI scans, verifies `SHA256SUMS.txt` in the updater, and expands offline regression checks to 101 assertions.
 
-The following improvements from 1.11.0 are retained:
-
-- Polish the existing teal interface without replacing its layout: a 360pt panel, cleaner spacing and cards, clearer progress bars, and the original system fonts, sizes and weights.
-- Support private accounts with an optional read token stored in macOS Keychain, sent only to the configured HTTPS profile endpoint.
-- Keep valid data visible when refreshes fail, distinguish successful fetches from refresh attempts, and explain network, authentication, not-found and rate-limit errors. API polling has a 60-second minimum (300 seconds by default).
-- Make all-device vs. local-Mac totals, UTC days and estimated costs explicit; show nonzero model shares below one percent as `<1%`.
-- Add press/drag-out feedback, interruptible charts, reduced-motion support and stronger high-contrast/opaque presentation. Correct the CLI documentation and add 45 pure-Swift regression checks.
-
-[Download v1.11.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.11.1) · [Full changelog](CHANGELOG.md)
+[Download v1.12.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.0) · [Full changelog](CHANGELOG.md)
 
 The README images below are 2× native AppKit offscreen renders of a **1.11.1** source build on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The snapshot-only change increases render resolution without changing the app interface. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
 

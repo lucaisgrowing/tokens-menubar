@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.12.0
+
+### Redesigned UI & App Icon
+- Redesign the macOS AppIcon (`Tools/make-icon.swift`, `Resources/AppIcon.icns`, `docs/icon.png`) into a text-free deep obsidian-teal squircle with ascending emerald-mint telemetry bars and a sculpted luminous lightning bolt.
+- Upgrade the dropdown panel to an elevated card hierarchy (hero telemetry card with cost & prompt cache-hit badges, unified mini-leaderboard + 7-day pace card, elevated dual KPI cards, unified 7-day bar card, month + flame-streak card, and inline proportional bars for today's models).
+- Replace the 99%–100% single-bar leaderboard progress with a live **3-row Mini-Leaderboard Ladder** showing the rival directly above (`+gap`), your highlighted row, and the trailing rival below (`−lead`), plus a percentile badge (`Top XX%`) and a 1-click Today / All-time board switcher.
+- Add an ease-out reveal animation with a one-shot leading-edge sheen & specular sweep on the Today / 7-day average bar (interruptible on live updates, automatically disabled when Reduce Motion is enabled).
+- Redesign Actions & Settings into macOS Sequoia inset grouped cards with soft-tinted icon badges, inline **Menu Bar Display** multi-toggle pills (`Tokens` / `Cost` / `Rank`), and a **Daily Cost Budget** dialog persisted directly to `config.json`.
+- Add back navigation (`‹`) on the chart & contributions popovers and an in-popover Today / Lifetime switcher on the model distribution chart.
+- Add a pill backing behind the footer status stamp for legibility over dark wallpapers.
+
+### Added & Fixed
+- Compute and display UTC active-day streaks (panel, heatmap summary, and share card) and prompt cache-hit rate (hero card, tooltip, and heatmap day readout) from existing contribution fields with zero extra API calls.
+- Watch `~/.config/tokens-menubar` and `~/.config/tokens` for hot-reloading `config.json` and `credentials.json` without restarting TokensBar.
+- Detect local `tokens` CLI version, background `tokens serve` status, and upstream `missuo/tokens` releases; surface a 1-click copyable upgrade command when the CLI is outdated.
+- Fix leaderboard page-boundary `#101`/`#201` missing `above` neighbour, jump directly to the target page using `user.rank` (removing the 600-user cap), and fall back to `user.rank` on the Share Card (also auto-fitting large 10B+ token counts without truncation).
+- Add `NSWorkspace.didWakeNotification` and `NWPathMonitor` network-recovery refreshes, timer coalescing tolerances, `refreshLocal` re-entrancy/throttling (decoupling `--week`/`--month` scans), cached `DateFormatter`s and `CLI.binary()`, shared `URLSession`s, dynamic `User-Agent`, and `config.apiBase` support in `Embed` / `ShareCardView`.
+- Verify `SHA256SUMS.txt` and `CFBundleIdentifier` in the in-place updater (`Installer.swift`) and self-clean the temporary swap script.
+- Expand offline pure-Swift regression suite from 76 to 101 assertions. Bundle version 1.12.0 (build 19).
+
 ## 1.11.1
 
 ### Fixed
