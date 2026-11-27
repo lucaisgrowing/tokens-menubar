@@ -34,7 +34,7 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
 
 [下载 v1.12.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.0) · [完整更新日志](CHANGELOG.md)
 
-下方图片由 **1.11.1** 源码构建的 App 在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。此次仅修改诊断截图的分辨率，不改变应用界面。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
+下方图片由 **1.12.0** 源码构建的 App 在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
 
 > **Apple silicon：** 建议用 Apple 芯片版 Homebrew 安装原生 **arm64** `tokens` CLI（`brew install owo-network/brew/tokens`）。仅支持 Intel 的 CLI 需要 Rosetta 才能运行；TokensBar 优先选择可用的原生安装，无法启动时会显示原因，而不是只说「提交失败」。
 
@@ -100,8 +100,6 @@ Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框�
   <img src="docs/zh/contributions.png" width="640" alt="一年的每日 token 活动热力图">
 </p>
 
-贡献图截图对应当前源码；月份标签间距修正尚未包含在 v1.11.1 发布版中。
-
 右上角的切换决定下方读数按什么拆分：**模型**、**客户端**、**金额**。切到金额时格子的深浅也会跟着变 —— token 的深浅用 API 给的强度，金额的深浅是按每日花费的四分位自己算的，所以「量大但便宜」和「量小但贵」两种日子看起来不一样。
 
 色阶是单一色相由浅到深，浅色和深色模式各一套；只要当天有用量，就不会退回成空格子的颜色。
@@ -159,7 +157,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 ### 离线检查
 
-安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.11.1 的 macOS 发布流程已通过这 45 项检查、10 项原生浅深色强调色／对比度检查（系统强调色设为蓝色）、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
+安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.12.0 的 macOS 发布流程已通过这 101 项检查、10 项原生浅深色强调色／对比度检查（系统强调色设为蓝色）、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
 
 ## 配置
 

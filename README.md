@@ -34,7 +34,7 @@ Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond sy
 
 [Download v1.12.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.0) · [Full changelog](CHANGELOG.md)
 
-The README images below are 2× native AppKit offscreen renders of a **1.11.1** source build on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The snapshot-only change increases render resolution without changing the app interface. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
+The README images below are 2× native AppKit offscreen renders of **TokensBar 1.12.0** on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
 
 > **Apple silicon:** use a native **arm64** `tokens` CLI, installed through Apple silicon Homebrew (`brew install owo-network/brew/tokens`). An Intel-only CLI needs Rosetta to run; TokensBar prefers a native installation when available and reports an unlaunchable CLI rather than a bare "submit failed".
 
@@ -111,8 +111,6 @@ The seven-day bars in the panel — or the **Active days** row in the menu — o
   <img src="docs/contributions.png" width="640" alt="A year of daily token activity as a heat grid">
 </p>
 
-The contributions screenshot reflects the current source; the month-label spacing fix is not yet in the v1.11.1 release.
-
 The toggle in the corner switches what the readout breaks the day down by — **Models**, **Clients** or **Cost**. Cost also recolours the grid: token intensity comes from the API, while the cost view derives its own levels from the quartiles of the daily spend, so a cheap-but-busy day and an expensive-but-quiet one look different.
 
 The ramp is one hue, light to dark, with separate steps for light and dark mode; days with any usage never fall back to the empty-cell colour.
@@ -170,7 +168,7 @@ For private accounts, create a **read token** in tokens.ci Settings, then choose
 
 ### Offline checks
 
-Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.11.1 macOS release workflow passed those 45 checks plus 10 native light/dark accent and contrast checks with a blue system preference, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
+Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.12.0 macOS release workflow passed those 101 checks plus 10 native light/dark accent and contrast checks with a blue system preference, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
 
 ## Configuration
 

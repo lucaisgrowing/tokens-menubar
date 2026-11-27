@@ -6,7 +6,7 @@ on:
       release:
         description: Published release to render (no binary changes)
         required: true
-        default: v1.11.1
+        default: v1.12.0
 
 permissions:
   contents: read
