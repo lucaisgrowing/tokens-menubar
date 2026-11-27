@@ -35,6 +35,16 @@ struct ContribDay {
     /// Per-client and per-model splits, each biggest-first.
     let clients: [ContribSlice]
     let models: [ContribSlice]
+    /// Prompt/output breakdown aggregated across clients when reported by the API.
+    var input: Int = 0
+    var output: Int = 0
+    var cacheRead: Int = 0
+    var cacheWrite: Int = 0
+    var reasoning: Int = 0
+
+    var cacheHitRate: Double? {
+        TokensBarCacheHit(input: input, cacheRead: cacheRead, cacheWrite: cacheWrite)
+    }
 
     func slices(_ mode: ContribMode) -> [ContribSlice] {
         switch mode {
@@ -42,6 +52,10 @@ struct ContribDay {
         case .models, .cost: return models
         }
     }
+}
+
+private func TokensBarCacheHit(input: Int, cacheRead: Int, cacheWrite: Int) -> Double? {
+    cacheHitRate(input: input, cacheRead: cacheRead, cacheWrite: cacheWrite)
 }
 
 /// One hue, light→dark, so the ramp reads as magnitude. Each mode has its own
@@ -111,9 +125,32 @@ final class HeatmapView: NSView {
     /// Quartile cut points over the non-zero daily costs, so the cost view has a
     /// ramp of its own instead of reusing the token intensity.
     private var costCuts: [Double] = []
+    /// Cached streaks for the current `days` map.
+    private var streakInfo: (current: Int, longest: Int) = (0, 0)
     /// Week column → x offset, filled while drawing.
     private var firstColumnMonday = Date()
     private var columns = 0
+
+    /// Cached formatters keyed by app language so hovering cells never allocates
+    /// DateFormatters inside `draw(_:)`.
+    private var formatterLang: Lang?
+    private var monthFmt = DateFormatter()
+    private var weekdayFmt = DateFormatter()
+    private var rangeFmt = DateFormatter()
+    private var dayReadoutFmt = DateFormatter()
+
+    private func ensureFormatters() {
+        guard formatterLang != L10n.current else { return }
+        formatterLang = L10n.current
+        let locale = displayLocale()
+        let tz = gridCalendar.timeZone
+        for (fmt, template) in [(monthFmt, "MMM"), (weekdayFmt, "EEE"),
+                                (rangeFmt, "MMM d, yyyy"), (dayReadoutFmt, "EEE, MMM d, yyyy")] {
+            fmt.locale = locale
+            fmt.timeZone = tz
+            fmt.setLocalizedDateFormatFromTemplate(template)
+        }
+    }
 
     var neededSize: NSSize {
         recomputeColumns()
@@ -124,8 +161,13 @@ final class HeatmapView: NSView {
 
     private func recomputeCostCuts() {
         let costs = days.values.map(\.cost).filter { $0 > 0 }.sorted()
-        guard costs.count >= 4 else { return costCuts = [] }
-        costCuts = [0.25, 0.5, 0.75].map { costs[Int(Double(costs.count - 1) * $0)] }
+        if costs.count >= 4 {
+            costCuts = [0.25, 0.5, 0.75].map { costs[Int(Double(costs.count - 1) * $0)] }
+        } else {
+            costCuts = []
+        }
+        let activeKeys = Set(days.values.filter { $0.tokens > 0 }.map { dayFormatter.string(from: $0.date) })
+        streakInfo = computeStreaks(activeDayKeys: activeKeys, todayKey: dayFormatter.string(from: Date()))
     }
 
     /// Level for a cell: the API's token intensity, or a cost quartile.
@@ -218,10 +260,8 @@ final class HeatmapView: NSView {
     }
 
     private func drawMonthLabels(origin: CGPoint) {
-        let f = DateFormatter()
-        f.locale = displayLocale()
-        f.timeZone = gridCalendar.timeZone
-        f.setLocalizedDateFormatFromTemplate("MMM")
+        ensureFormatters()
+        let f = monthFmt
         let font = NSFont.systemFont(ofSize: 10)
         let candidates = heatmapMonthCandidates(firstMonday: firstColumnMonday, columns: columns, calendar: gridCalendar)
         let labels = candidates.map { f.string(from: $0.date) }
@@ -237,10 +277,8 @@ final class HeatmapView: NSView {
     }
 
     private func drawWeekdayLabels(origin: CGPoint) {
-        let f = DateFormatter()
-        f.locale = displayLocale()
-        f.timeZone = gridCalendar.timeZone
-        f.setLocalizedDateFormatFromTemplate("EEE")
+        ensureFormatters()
+        let f = weekdayFmt
         // Mondays, Wednesdays and Fridays only — a label on all seven is noise.
         for row in [0, 2, 4] {
             guard let day = gridCalendar.date(byAdding: .day, value: row,
@@ -271,27 +309,23 @@ final class HeatmapView: NSView {
     /// Always-visible readout: the hovered day, or the range summary when the
     /// pointer is elsewhere. Values lead, labels follow.
     private func drawReadout() {
+        ensureFormatters()
         let y = padding + 16
         guard let hovered, let day = days[hovered] else {
-            let f = DateFormatter()
-            f.locale = displayLocale()
-            f.timeZone = gridCalendar.timeZone
-            f.setLocalizedDateFormatFromTemplate("MMM d, yyyy")
             let active = days.values.filter { $0.tokens > 0 }.count
-            drawText(t("heat.activeDays", active),
+            let headline = streakInfo.current >= 2
+                ? t("heat.activeDaysStreak", active, streakInfo.current, streakInfo.longest)
+                : t("heat.activeDays", active)
+            drawText(headline,
                      at: NSRect(x: padding, y: y, width: bounds.width - padding * 2, height: 16),
                      font: .systemFont(ofSize: 12, weight: .semibold),
                      colour: .labelColor, alignment: .left)
-            drawText("\(f.string(from: start)) – \(f.string(from: end))",
+            drawText("\(rangeFmt.string(from: start)) – \(rangeFmt.string(from: end))",
                      at: NSRect(x: padding, y: y - 16, width: bounds.width - padding * 2, height: 14),
                      font: .systemFont(ofSize: 11), colour: .secondaryLabelColor, alignment: .left)
             return
         }
 
-        let f = DateFormatter()
-        f.locale = displayLocale()
-        f.timeZone = gridCalendar.timeZone
-        f.setLocalizedDateFormatFromTemplate("EEE, MMM d, yyyy")
         let hero = mode == .cost ? fmtMoney(day.cost)
                                  : "\(fmtTokens(day.tokens))  \(t("heat.tokens"))"
         drawText(hero,
@@ -301,9 +335,12 @@ final class HeatmapView: NSView {
 
         // Everything else on one secondary line — the scale legend sits above the
         // right end of this row, so nothing is right-aligned here.
-        var parts = [f.string(from: day.date)]
+        var parts = [dayReadoutFmt.string(from: day.date)]
         parts.append(mode == .cost ? fmtTokens(day.tokens) + " tokens" : fmtMoney(day.cost))
         if day.messages > 0 { parts.append(t("heat.messages", fmtExact(day.messages))) }
+        if let hit = day.cacheHitRate {
+            parts.append(t("heat.cache", Int((hit * 100).rounded())))
+        }
         let top = day.slices(mode)
             .sorted { mode == .cost ? $0.cost > $1.cost : $0.tokens > $1.tokens }
             .prefix(3)
@@ -339,19 +376,34 @@ final class ContribPopover: NSObject {
     private let popover = NSPopover()
     private let grid = HeatmapView()
     private let heading = NSTextField(labelWithString: "")
+    private var backButton: NSButton!
+    private var headingLeading: NSLayoutConstraint!
     private var toggle: NSSegmentedControl!
     private var gridWidth: NSLayoutConstraint!
     private var gridHeight: NSLayoutConstraint!
     private var built = false
 
+    var onBack: (() -> Void)?
     var isShown: Bool { popover.isShown }
 
-    func show(days: [ContribDay], start: Date, end: Date, from anchor: NSView?) {
+    func show(days: [ContribDay], start: Date, end: Date, from anchor: NSView?,
+              interactiveNav: Bool = false) {
         guard let anchor else { return }
         build()
+        setBackVisible(interactiveNav)
         load(days: days, start: start, end: end)
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+    }
+
+    private func setBackVisible(_ visible: Bool) {
+        backButton.isHidden = !visible || onBack == nil
+        headingLeading.constant = backButton.isHidden ? 18 : 36
+    }
+
+    @objc private func backClicked() {
+        popover.performClose(nil)
+        onBack?()
     }
 
     func update(days: [ContribDay], start: Date, end: Date) {
@@ -411,14 +463,29 @@ final class ContribPopover: NSObject {
         toggle.translatesAutoresizingMaskIntoConstraints = false
         self.toggle = toggle
 
+        let back = NSButton(image: NSImage(systemSymbolName: "chevron.left",
+                                           accessibilityDescription: t("menu.back")) ?? NSImage(),
+                            target: self, action: #selector(backClicked))
+        back.isBordered = false
+        back.contentTintColor = .secondaryLabelColor
+        back.translatesAutoresizingMaskIntoConstraints = false
+        back.isHidden = true
+        self.backButton = back
+
         let content = NSView()
+        content.addSubview(back)
         content.addSubview(heading)
         content.addSubview(toggle)
         content.addSubview(grid)
         gridWidth = grid.widthAnchor.constraint(equalToConstant: 700)
         gridHeight = grid.heightAnchor.constraint(equalToConstant: 200)
+        headingLeading = heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18)
         NSLayoutConstraint.activate([
-            heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
+            back.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 14),
+            back.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
+            back.widthAnchor.constraint(equalToConstant: 18),
+            back.heightAnchor.constraint(equalToConstant: 18),
+            headingLeading,
             heading.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
             toggle.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
             toggle.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
@@ -433,7 +500,7 @@ final class ContribPopover: NSObject {
         vc.view = content
         popover.contentViewController = vc
         popover.behavior = .transient
-        popover.animates = true
+        popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
     /// Offscreen render for `--contrib-png`, same trick as the chart popover.
@@ -441,6 +508,7 @@ final class ContribPopover: NSObject {
                   dark: Bool = false, hover: Date? = nil,
                   mode: ContribMode = .models) -> Data? {
         build()
+        setBackVisible(false)
         load(days: days, start: start, end: end)
         grid.mode = mode
         toggle.selectedSegment = mode.rawValue

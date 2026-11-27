@@ -1,17 +1,11 @@
-// Regenerates Resources/AppIcon.icns. Run from the repo root:
+// Regenerates Resources/AppIcon.icns and docs/icon.png. Run from the repo root:
 //
 //     swift Tools/make-icon.swift
 //
-// The .icns is committed, so this only needs running when the artwork changes.
-// Each size is drawn from scratch rather than downscaled, so small sizes stay
-// crisp.
-//
-// Artwork: a graphite squircle standing in for a dark menu bar. A lighter strip
-// across the top carries the bolt glyph and a token count — the app's actual job
-// — with ascending amber bars below it and the "tokens" wordmark on the floor.
-// Detail drops out as the canvas shrinks: the lettering goes first, then the
-// strip, leaving the bolt alone at 32px and under, which is the same glyph the
-// menu bar itself uses (SF Symbol bolt.fill).
+// Each size is drawn from scratch in sRGB CoreGraphics so small sizes stay razor
+// sharp. Zero text inside the icon: a deep obsidian-teal macOS squircle housing
+// luminous ascending emerald-teal telemetry bars and a sculpted lightning emblem,
+// harmonizing directly with TokensBar's teal/emerald UI identity.
 
 import AppKit
 import Foundation
@@ -24,194 +18,293 @@ let canvas: [(name: String, px: Int)] = [
     ("icon_512x512", 512), ("icon_512x512@2x", 1024),
 ]
 
-let amberTop = NSColor(srgbRed: 1.00, green: 0.80, blue: 0.29, alpha: 1)
-let amberBottom = NSColor(srgbRed: 0.97, green: 0.60, blue: 0.10, alpha: 1)
-
-/// A recoloured SF Symbol, isolated in its own image so the tint fill cannot
-/// bleed onto the background it will later be drawn over.
-func symbol(_ name: String, pointSize: CGFloat, colour: NSColor) -> NSImage? {
-    let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
-    guard let base = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-        .withSymbolConfiguration(config) else { return nil }
-    let out = NSImage(size: base.size)
-    out.lockFocus()
-    base.draw(in: CGRect(origin: .zero, size: base.size))
-    colour.set()
-    CGRect(origin: .zero, size: base.size).fill(using: .sourceAtop)
-    out.unlockFocus()
-    return out
+func srgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor {
+    NSColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: a).cgColor
 }
 
-func roundedFont(_ pointSize: CGFloat, weight: NSFont.Weight) -> NSFont {
-    let base = NSFont.systemFont(ofSize: pointSize, weight: weight)
-    guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
-    return NSFont(descriptor: descriptor, size: pointSize) ?? base
+/// Precision lightning bolt path centered in `rect`, with fuller optical weight
+/// and subtly rounded vertices so it reads as a sculpted macOS glyph rather than
+/// sharp needles.
+func boltPath(in rect: CGRect) -> CGPath {
+    func pt(_ nx: CGFloat, _ ny: CGFloat) -> CGPoint {
+        CGPoint(x: rect.minX + rect.width * nx, y: rect.minY + rect.height * ny)
+    }
+    let pts = [
+        pt(0.60, 0.99),
+        pt(0.11, 0.43),
+        pt(0.46, 0.43),
+        pt(0.38, 0.01),
+        pt(0.89, 0.57),
+        pt(0.54, 0.57),
+    ]
+    let cornerR = min(rect.width, rect.height) * 0.065
+    let p = CGMutablePath()
+    let n = pts.count
+    let startMid = CGPoint(x: (pts[n - 1].x + pts[0].x) / 2, y: (pts[n - 1].y + pts[0].y) / 2)
+    p.move(to: startMid)
+    for i in 0..<n {
+        let curr = pts[i]
+        let next = pts[(i + 1) % n]
+        p.addArc(tangent1End: curr, tangent2End: next, radius: cornerR)
+    }
+    p.closeSubpath()
+    return p
 }
 
-/// Vertical amber gradient clipped to a rounded rect.
-func amberBar(_ cg: CGContext, _ rect: CGRect, radius: CGFloat, alpha: CGFloat) {
-    let colours = [amberTop.withAlphaComponent(alpha).cgColor,
-                   amberBottom.withAlphaComponent(alpha).cgColor] as CFArray
-    guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                    colors: colours, locations: [0, 1]) else { return }
+func drawRoundedGradientBar(_ cg: CGContext, rect: CGRect, radius: CGFloat,
+                            topColor: CGColor, bottomColor: CGColor,
+                            glowColor: CGColor?, specularAlpha: CGFloat) {
+    let path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+
+    if let glowColor {
+        cg.saveGState()
+        cg.setShadow(offset: CGSize(width: 0, height: -rect.width * 0.08),
+                     blur: rect.width * 0.45, color: glowColor)
+        cg.addPath(path)
+        cg.setFillColor(bottomColor)
+        cg.fillPath()
+        cg.restoreGState()
+    }
+
     cg.saveGState()
-    cg.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+    cg.addPath(path)
     cg.clip()
-    cg.drawLinearGradient(gradient,
-                          start: CGPoint(x: 0, y: rect.maxY),
-                          end: CGPoint(x: 0, y: rect.minY),
-                          options: [])
+    if let grad = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+                             colors: [topColor, bottomColor] as CFArray,
+                             locations: [0, 1]) {
+        cg.drawLinearGradient(grad,
+                              start: CGPoint(x: rect.midX, y: rect.maxY),
+                              end: CGPoint(x: rect.midX, y: rect.minY),
+                              options: [])
+    }
+
+    // Subtle glass top-edge highlight on each bar
+    if specularAlpha > 0 {
+        let shine = CGRect(x: rect.minX, y: rect.maxY - max(1.5, rect.height * 0.12),
+                           width: rect.width, height: max(1.5, rect.height * 0.12))
+        if let topGrad = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+                                    colors: [srgb(255, 255, 255, specularAlpha),
+                                             srgb(255, 255, 255, 0)] as CFArray,
+                                    locations: [0, 1]) {
+            cg.drawLinearGradient(topGrad,
+                                  start: CGPoint(x: shine.midX, y: shine.maxY),
+                                  end: CGPoint(x: shine.midX, y: shine.minY),
+                                  options: [])
+        }
+    }
+    cg.restoreGState()
+
+    // Crisp rim stroke on the bar
+    cg.saveGState()
+    cg.addPath(path)
+    cg.setStrokeColor(srgb(210, 255, 245, 0.22))
+    cg.setLineWidth(max(0.75, rect.width * 0.025))
+    cg.strokePath()
     cg.restoreGState()
 }
 
 func drawIcon(px: Int) -> Data {
     let size = CGFloat(px)
-    // Draw into an explicitly sRGB context. An untagged bitmap gets colour-shifted
-    // by consumers that guess the space (NSWorkspace's icon cache, for one).
     guard let space = CGColorSpace(name: CGColorSpace.sRGB),
           let cg = CGContext(data: nil, width: px, height: px,
                              bitsPerComponent: 8, bytesPerRow: 0, space: space,
                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
     else { fatalError("cannot create context at \(px)px") }
 
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(cgContext: cg, flipped: false)
+    cg.setAllowsAntialiasing(true)
+    cg.setShouldAntialias(true)
 
-    // macOS app icon geometry: 824/1024 content box, 185.4/1024 corner radius.
+    // macOS Big Sur / Sonoma / Sequoia standard icon canvas: 824/1024 box, 185.4/1024 radius.
     let inset = size * (100.0 / 1024.0)
     let box = CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
     let radius = size * (185.4 / 1024.0)
     let squircle = CGPath(roundedRect: box, cornerWidth: radius, cornerHeight: radius, transform: nil)
 
+    // Soft macOS dock drop shadow outside the squircle
+    if px >= 64 {
+        cg.saveGState()
+        cg.setShadow(offset: CGSize(width: 0, height: -size * 0.018),
+                     blur: size * 0.036,
+                     color: srgb(0, 0, 0, 0.36))
+        cg.addPath(squircle)
+        cg.setFillColor(srgb(12, 26, 30, 1))
+        cg.fillPath()
+        cg.restoreGState()
+    }
+
+    // Clip to squircle interior
     cg.saveGState()
     cg.addPath(squircle)
     cg.clip()
 
-    let top = NSColor(srgbRed: 0.22, green: 0.24, blue: 0.28, alpha: 1).cgColor
-    let bottom = NSColor(srgbRed: 0.07, green: 0.08, blue: 0.10, alpha: 1).cgColor
-    if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                colors: [top, bottom] as CFArray, locations: [0, 1]) {
-        cg.drawLinearGradient(gradient,
-                              start: CGPoint(x: 0, y: box.maxY),
-                              end: CGPoint(x: 0, y: box.minY),
+    // 1. Deep obsidian-teal base gradient
+    if let bgGrad = CGGradient(colorsSpace: space,
+                               colors: [srgb(24, 52, 58), srgb(13, 30, 35), srgb(7, 17, 20)] as CFArray,
+                               locations: [0.0, 0.52, 1.0]) {
+        cg.drawLinearGradient(bgGrad,
+                              start: CGPoint(x: box.midX, y: box.maxY),
+                              end: CGPoint(x: box.midX, y: box.minY),
                               options: [])
     }
 
-    // Three tiers of detail. Below 64px the strip is a smear and lettering is
-    // noise, so those sizes fall back to the bolt on its own.
-    let showsStrip = px >= 64
-    let showsLettering = px >= 128 // the count inside the strip, and the wordmark
-
-    var barsTop = box.maxY
-    if showsStrip {
-        let stripHeight = box.height * 0.235
-        let strip = CGRect(x: box.minX, y: box.maxY - stripHeight,
-                           width: box.width, height: stripHeight)
-        barsTop = strip.minY
-
-        // Lift the strip out of the background rather than painting a flat
-        // colour over it, so the squircle's own gradient still shows through.
-        cg.setFillColor(NSColor(white: 1, alpha: 0.075).cgColor)
-        cg.fill(strip)
-        cg.setFillColor(NSColor(white: 1, alpha: 0.10).cgColor)
-        cg.fill(CGRect(x: strip.minX, y: strip.minY,
-                       width: strip.width, height: max(1, size * 0.004)))
-
-        // Bolt and count travel as one centred group, the way they sit together
-        // in the real menu bar.
-        let glyphPoint = stripHeight * (showsLettering ? 0.62 : 0.74)
-        let bolt = symbol("bolt.fill", pointSize: glyphPoint, colour: amberTop)
-        let boltSize = bolt?.size ?? .zero
-
-        var countText: NSAttributedString?
-        if showsLettering {
-            let pointSize = stripHeight * 0.52
-            countText = NSAttributedString(string: "1.2M", attributes: [
-                .font: roundedFont(pointSize, weight: .semibold),
-                .foregroundColor: NSColor(white: 1, alpha: 0.95),
-                .kern: pointSize * 0.01,
-            ])
-        }
-        let textSize = countText?.size() ?? .zero
-        let gap = countText == nil ? 0 : stripHeight * 0.14
-        let groupWidth = boltSize.width + gap + textSize.width
-        var x = strip.midX - groupWidth / 2
-
-        if let bolt {
-            bolt.draw(in: CGRect(x: x, y: strip.midY - boltSize.height / 2,
-                                 width: boltSize.width, height: boltSize.height))
-            x += boltSize.width + gap
-        } else {
-            FileHandle.standardError.write("warning: bolt.fill unavailable\n".data(using: .utf8)!)
-        }
-        if let countText {
-            // Nudge up off the optical centre: the digits have no descenders.
-            countText.draw(at: NSPoint(x: x, y: strip.midY - textSize.height / 2 + size * 0.004))
-        }
+    // 2. Ambient emerald/teal radial glow behind the telemetry bars
+    if let glow = CGGradient(colorsSpace: space,
+                             colors: [srgb(52, 208, 172, 0.32),
+                                      srgb(36, 134, 132, 0.12),
+                                      srgb(10, 26, 30, 0.0)] as CFArray,
+                             locations: [0.0, 0.45, 1.0]) {
+        cg.drawRadialGradient(glow,
+                              startCenter: CGPoint(x: box.midX + box.width * 0.08, y: box.midY + box.height * 0.04),
+                              startRadius: 0,
+                              endCenter: CGPoint(x: box.midX, y: box.midY),
+                              endRadius: box.width * 0.62,
+                              options: [.drawsAfterEndLocation])
     }
 
-    if showsStrip {
-        // "tokens" sits on the floor, so the bars stand on top of it rather than
-        // filling the field. At 64px there is no wordmark and they get it back.
-        var barsBottom = box.minY + box.height * 0.135
-        if showsLettering {
-            let pointSize = box.height * 0.14
-            let wordmark = NSAttributedString(string: "tokens", attributes: [
-                .font: roundedFont(pointSize, weight: .semibold),
-                .foregroundColor: NSColor(white: 1, alpha: 0.93),
-                .kern: pointSize * 0.04,
-            ])
-            let wordmarkSize = wordmark.size()
-            let baseline = box.minY + box.height * 0.075
-            wordmark.draw(at: NSPoint(x: box.midX - wordmarkSize.width / 2, y: baseline))
-            barsBottom = baseline + wordmarkSize.height + box.height * 0.055
-        }
+    // 3. Subtle top glass specular arc (gives authentic macOS tactile depth)
+    if let sheen = CGGradient(colorsSpace: space,
+                              colors: [srgb(190, 250, 240, 0.14),
+                                       srgb(190, 250, 240, 0.03),
+                                       srgb(190, 250, 240, 0.0)] as CFArray,
+                              locations: [0.0, 0.45, 1.0]) {
+        cg.drawLinearGradient(sheen,
+                              start: CGPoint(x: box.midX, y: box.maxY),
+                              end: CGPoint(x: box.midX, y: box.maxY - box.height * 0.42),
+                              options: [])
+    }
 
-        // Five ascending bars — a usage trend, and the same shape as the week
-        // chart inside the panel.
-        let sidePad = box.width * 0.145
-        let region = CGRect(x: box.minX + sidePad,
-                            y: barsBottom,
-                            width: box.width - sidePad * 2,
-                            height: (barsTop - box.height * 0.085) - barsBottom)
-        let heights: [CGFloat] = [0.30, 0.45, 0.61, 0.79, 1.0]
-        let alphas: [CGFloat] = [0.62, 0.72, 0.83, 0.92, 1.0]
-        let gapRatio: CGFloat = 0.42
-        let barWidth = region.width / (CGFloat(heights.count) + gapRatio * CGFloat(heights.count - 1))
-        let barRadius = min(barWidth * 0.34, barWidth / 2)
+    // 4. Subtle recessed glass telemetry tray (for >= 64px)
+    if px >= 64 {
+        let trayInset = box.width * 0.115
+        let tray = CGRect(x: box.minX + trayInset,
+                          y: box.minY + box.height * 0.135,
+                          width: box.width - trayInset * 2,
+                          height: box.height * 0.73)
+        let trayR = box.width * 0.155
+        let trayPath = CGPath(roundedRect: tray, cornerWidth: trayR, cornerHeight: trayR, transform: nil)
+        cg.saveGState()
+        cg.addPath(trayPath)
+        cg.setFillColor(srgb(255, 255, 255, 0.035))
+        cg.fillPath()
+        cg.addPath(trayPath)
+        cg.setStrokeColor(srgb(160, 245, 232, 0.10))
+        cg.setLineWidth(max(1, size * 0.003))
+        cg.strokePath()
+        cg.restoreGState()
 
-        for (i, fraction) in heights.enumerated() {
-            let height = max(barWidth * 0.7, region.height * fraction)
-            let rect = CGRect(x: region.minX + CGFloat(i) * (barWidth + barWidth * gapRatio),
-                              y: region.minY, width: barWidth, height: height)
-            amberBar(cg, rect, radius: barRadius, alpha: alphas[i])
-        }
-    } else {
-        if let bolt = symbol("bolt.fill", pointSize: size * 0.48, colour: amberTop) {
-            let s = bolt.size
+        // Delicate horizontal micro-grid lines inside tray
+        if px >= 128 {
             cg.saveGState()
-            cg.setShadow(offset: CGSize(width: 0, height: -size * 0.01),
-                         blur: size * 0.03,
-                         color: NSColor(white: 0, alpha: 0.5).cgColor)
-            bolt.draw(in: CGRect(x: (size - s.width) / 2, y: (size - s.height) / 2,
-                                 width: s.width, height: s.height))
+            cg.setStrokeColor(srgb(170, 240, 230, 0.06))
+            cg.setLineWidth(max(1, size * 0.0025))
+            for frac in [0.28, 0.50, 0.72] as [CGFloat] {
+                let y = tray.minY + tray.height * frac
+                cg.move(to: CGPoint(x: tray.minX + tray.width * 0.08, y: y))
+                cg.addLine(to: CGPoint(x: tray.maxX - tray.width * 0.08, y: y))
+            }
+            cg.strokePath()
             cg.restoreGState()
-        } else {
-            FileHandle.standardError.write("warning: bolt.fill unavailable\n".data(using: .utf8)!)
         }
     }
 
-    cg.restoreGState() // release the squircle clip
+    // 5. Telemetry Bars (5 bars at >= 64px, simplified bold 3 bars + bolt at <= 32px)
+    let small = px <= 32
+    if !small {
+        let barAreaX = box.minX + box.width * 0.195
+        let barAreaW = box.width * 0.61
+        let barBottom = box.minY + box.height * 0.215
+        let maxBarH = box.height * 0.45
 
-    // Hairline rim so the icon keeps an edge on dark wallpapers.
+        let heights: [CGFloat] = [0.28, 0.44, 0.60, 0.78, 1.00]
+        let gapRatio: CGFloat = 0.36
+        let count = CGFloat(heights.count)
+        let barW = barAreaW / (count + gapRatio * (count - 1))
+        let barR = barW * 0.38
+
+        // Colour ramp from deep ocean teal → vibrant emerald-mint (echoing the app's heatmap & accent)
+        let palettes: [(top: CGColor, bot: CGColor, glow: CGColor?)] = [
+            (srgb(52, 134, 138, 0.85), srgb(32, 86, 92, 0.82), nil),
+            (srgb(58, 158, 154, 0.90), srgb(36, 102, 106, 0.88), nil),
+            (srgb(66, 184, 166, 0.95), srgb(40, 122, 120, 0.92), nil),
+            (srgb(82, 214, 178, 0.98), srgb(44, 146, 132, 0.96), srgb(64, 214, 174, 0.22)),
+            (srgb(138, 250, 210, 1.00), srgb(48, 182, 152, 1.00), srgb(100, 245, 200, 0.40)),
+        ]
+
+        for (i, hFrac) in heights.enumerated() {
+            let h = max(barW * 0.9, maxBarH * hFrac)
+            let x = barAreaX + CGFloat(i) * (barW * (1 + gapRatio))
+            let rect = CGRect(x: x, y: barBottom, width: barW, height: h)
+            drawRoundedGradientBar(cg, rect: rect, radius: barR,
+                                   topColor: palettes[i].top,
+                                   bottomColor: palettes[i].bot,
+                                   glowColor: palettes[i].glow,
+                                   specularAlpha: i == 4 ? 0.38 : 0.18)
+        }
+
+        // 6. Sculpted luminous lightning bolt hovering cleanly in upper-left optical balance
+        let boltW = box.width * 0.255
+        let boltH = box.height * 0.34
+        let boltRect = CGRect(x: box.minX + box.width * 0.205,
+                              y: box.maxY - box.height * 0.165 - boltH,
+                              width: boltW, height: boltH)
+        let bolt = boltPath(in: boltRect)
+
+        // Warm-ivory / soft-mint luminous glow + crisp metallic fill
+        cg.saveGState()
+        cg.setShadow(offset: CGSize(width: 0, height: -size * 0.012),
+                     blur: size * 0.045,
+                     color: srgb(115, 255, 215, 0.55))
+        cg.addPath(bolt)
+        cg.setFillColor(srgb(245, 255, 250, 1))
+        cg.fillPath()
+        cg.restoreGState()
+
+        cg.saveGState()
+        cg.addPath(bolt)
+        cg.clip()
+        if let boltGrad = CGGradient(colorsSpace: space,
+                                     colors: [srgb(255, 255, 255),
+                                              srgb(218, 255, 244),
+                                              srgb(138, 240, 210)] as CFArray,
+                                     locations: [0.0, 0.55, 1.0]) {
+            cg.drawLinearGradient(boltGrad,
+                                  start: CGPoint(x: boltRect.midX, y: boltRect.maxY),
+                                  end: CGPoint(x: boltRect.midX, y: boltRect.minY),
+                                  options: [])
+        }
+        cg.restoreGState()
+    } else {
+        // Ultra-crisp small-size glyph (16px / 32px): bold luminous bolt centered
+        let boltW = box.width * 0.54
+        let boltH = box.height * 0.68
+        let boltRect = CGRect(x: box.midX - boltW / 2, y: box.midY - boltH / 2,
+                              width: boltW, height: boltH)
+        let bolt = boltPath(in: boltRect)
+        cg.saveGState()
+        cg.addPath(bolt)
+        cg.clip()
+        if let boltGrad = CGGradient(colorsSpace: space,
+                                     colors: [srgb(248, 255, 252),
+                                              srgb(122, 242, 206)] as CFArray,
+                                     locations: [0, 1]) {
+            cg.drawLinearGradient(boltGrad,
+                                  start: CGPoint(x: boltRect.midX, y: boltRect.maxY),
+                                  end: CGPoint(x: boltRect.midX, y: boltRect.minY),
+                                  options: [])
+        }
+        cg.restoreGState()
+    }
+
+    cg.restoreGState() // release squircle clip
+
+    // 7. Outer precision bevel rim (brighter at top, softer at bottom)
     cg.saveGState()
     cg.addPath(squircle)
-    cg.setStrokeColor(NSColor(white: 1, alpha: 0.12).cgColor)
-    cg.setLineWidth(max(1, size * 0.005))
+    cg.setLineWidth(max(1, size * 0.006))
+    cg.setStrokeColor(srgb(175, 245, 232, 0.22))
     cg.strokePath()
     cg.restoreGState()
 
-    NSGraphicsContext.restoreGraphicsState()
     guard let image = cg.makeImage(),
           let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     else { fatalError("cannot encode png at \(px)px") }

@@ -13,22 +13,28 @@
 import AppKit
 
 enum Embed {
-    static let base = "https://tokens.ci"
-
-    /// The live-card image URL, with the view and theme the site's dialog sets.
-    static func imageURL(user: String, dark: Bool, view3D: Bool = false) -> String {
-        let u = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? user
-        return "\(base)/api/embed/\(u)/svg?view=\(view3D ? "3d" : "2d")&theme=\(dark ? "dark" : "light")"
+    static func normalizedBase(_ apiBase: String) -> String {
+        let trimmed = apiBase.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "https://tokens.ci" }
+        return trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
     }
 
-    static func profileURL(user: String) -> String {
+    /// The live-card image URL, with the view and theme the site's dialog sets.
+    static func imageURL(user: String, apiBase: String = "https://tokens.ci",
+                         dark: Bool, view3D: Bool = false) -> String {
         let u = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? user
-        return "\(base)/u/\(u)"
+        return "\(normalizedBase(apiBase))/api/embed/\(u)/svg?view=\(view3D ? "3d" : "2d")&theme=\(dark ? "dark" : "light")"
+    }
+
+    static func profileURL(user: String, apiBase: String = "https://tokens.ci") -> String {
+        let u = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? user
+        return "\(normalizedBase(apiBase))/u/\(u)"
     }
 
     /// The README snippet the site's dialog copies: the image linked to the profile.
-    static func markdown(user: String, dark: Bool, view3D: Bool = false) -> String {
-        "[![Tokens Stats](\(imageURL(user: user, dark: dark, view3D: view3D)))](\(profileURL(user: user)))"
+    static func markdown(user: String, apiBase: String = "https://tokens.ci",
+                         dark: Bool, view3D: Bool = false) -> String {
+        "[![Tokens Stats](\(imageURL(user: user, apiBase: apiBase, dark: dark, view3D: view3D)))](\(profileURL(user: user, apiBase: apiBase)))"
     }
 }
 
@@ -58,11 +64,12 @@ final class ShareCardView: NSView {
         let pad: CGFloat = 28 * s
         let w = bounds.width
         let user = config.username.isEmpty ? "tokens" : "@" + config.username
+        let host = URL(string: Embed.normalizedBase(config.apiBase))?.host ?? "tokens.ci"
 
         // Header: handle left, profile path right.
         text(user, in: NSRect(x: pad, y: 22 * s, width: w * 0.6, height: 26 * s),
              font: .systemFont(ofSize: 20 * s, weight: .bold), colour: primary)
-        text("tokens.ci/u/\(config.username)",
+        text("\(host)/u/\(config.username)",
              in: NSRect(x: w * 0.4 - pad, y: 26 * s, width: w * 0.6, height: 18 * s),
              font: .systemFont(ofSize: 12 * s, weight: .medium), colour: secondary, align: .right)
 
@@ -78,20 +85,39 @@ final class ShareCardView: NSView {
 
         fill(NSRect(x: pad, y: 82 * s, width: w - pad * 2, height: 1), radius: 0, colour: rule)
 
+        let rankValue: Int = {
+            if let r = server?.allTime?.rank, r > 0 { return r }
+            if let r = server?.rank, r > 0 { return r }
+            return 0
+        }()
+        let activeText: String = {
+            let days = server?.activeDays ?? 0
+            if let streak = server?.currentStreak, streak >= 2 {
+                return "\(days) · \(streak)d"
+            }
+            return "\(days)"
+        }()
+
         // Stat row: label above, value below, tokens in the accent like the site.
         let stats: [(String, String, NSColor)] = [
             ("Tokens", fmtExact(server?.totalTokens ?? 0), accent),
             ("Cost", fmtMoney(server?.totalCost ?? 0), primary),
-            ("Rank", (server?.allTime?.rank ?? 0) > 0 ? "#\(server!.allTime!.rank)" : "#—", primary),
-            ("Active days", "\(server?.activeDays ?? 0)", primary),
+            ("Rank", rankValue > 0 ? "#\(rankValue)" : "#—", primary),
+            ("Active days", activeText, primary),
         ]
         let colW = (w - pad * 2) / CGFloat(stats.count)
         for (i, stat) in stats.enumerated() {
             let x = pad + colW * CGFloat(i)
-            text(stat.0, in: NSRect(x: x, y: 110 * s, width: colW - 12 * s, height: 16 * s),
+            let maxW = colW - 12 * s
+            text(stat.0, in: NSRect(x: x, y: 110 * s, width: maxW, height: 16 * s),
                  font: .systemFont(ofSize: 11 * s, weight: .semibold), colour: secondary)
-            text(stat.1, in: NSRect(x: x, y: 130 * s, width: colW - 12 * s, height: 30 * s),
-                 font: .monospacedDigitSystemFont(ofSize: 22 * s, weight: .semibold), colour: stat.2)
+            var size: CGFloat = 22
+            while size > 14,
+                  measure(stat.1, font: .monospacedDigitSystemFont(ofSize: size * s, weight: .semibold)).width > maxW {
+                size -= 1
+            }
+            text(stat.1, in: NSRect(x: x, y: (130 + (22 - size) * 0.4) * s, width: maxW, height: 30 * s),
+                 font: .monospacedDigitSystemFont(ofSize: size * s, weight: .semibold), colour: stat.2)
         }
 
         // Footer wordmark.

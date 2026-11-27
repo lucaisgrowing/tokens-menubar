@@ -14,10 +14,11 @@
 
 import AppKit
 import Foundation
+import Network
 
 // MARK: - Config
 
-struct Config {
+struct Config: Equatable {
     var username: String
     var apiBase = "https://tokens.ci"
     var apiRefreshSeconds: TimeInterval = 300
@@ -69,6 +70,60 @@ struct Config {
               let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         return o[key] as? String
+    }
+
+    /// Merges selected keys into `~/.config/tokens-menubar/config.json`, preserving
+    /// any existing user-specified settings.
+    @discardableResult
+    static func saveOverrides(_ updates: [String: Any]) -> Bool {
+        let fm = FileManager.default
+        let url = URL(fileURLWithPath: configPath)
+        let dir = url.deletingLastPathComponent()
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        var obj = (fm.contents(atPath: configPath)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) ?? [:]
+        for (k, v) in updates { obj[k] = v }
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: obj, options: [.prettyPrinted, .sortedKeys])
+        else { return false }
+        return (try? data.write(to: url, options: .atomic)) != nil
+    }
+}
+
+/// Watches config & credentials directories so edits to `config.json` or a fresh
+/// `tokens login` take effect without restarting TokensBar.
+final class ConfigWatcher {
+    private var sources: [DispatchSourceFileSystemObject] = []
+    private var pending: DispatchWorkItem?
+    private let onChange: () -> Void
+
+    init(paths: [String], onChange: @escaping () -> Void) {
+        self.onChange = onChange
+        for dir in Set(paths) { watch(dir) }
+    }
+
+    private func watch(_ dir: String) {
+        let fd = open(dir, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let src = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.write, .rename, .delete, .attrib],
+            queue: .main)
+        src.setEventHandler { [weak self] in self?.schedule() }
+        src.setCancelHandler { close(fd) }
+        src.resume()
+        sources.append(src)
+    }
+
+    private func schedule() {
+        pending?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.onChange() }
+        pending = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    deinit {
+        pending?.cancel()
+        sources.forEach { $0.cancel() }
     }
 }
 
@@ -151,10 +206,14 @@ func rowText(_ label: String, _ value: String, _ trailing: String?) -> String {
     return head + (head.hasSuffix(" ") ? "" : " ") + trailing
 }
 
-func fmtClock(_ date: Date) -> String {
+let clockFormatter: DateFormatter = {
     let f = DateFormatter()
     f.dateFormat = "HH:mm"
-    return f.string(from: date)
+    return f
+}()
+
+func fmtClock(_ date: Date) -> String {
+    clockFormatter.string(from: date)
 }
 
 // MARK: - Models
@@ -179,6 +238,7 @@ struct BoardStanding {
     /// Own period total as this board reports it, so the gap uses one source.
     var tokens: Int
     var above: Neighbour?
+    var below: Neighbour? = nil
 }
 
 enum RankMode: String {
@@ -206,6 +266,8 @@ struct ServerStats {
     var contribs: [ContribDay] = []
     var contribStart: Date?
     var contribEnd: Date?
+    var currentStreak: Int = 0
+    var longestStreak: Int = 0
 
     func standing(_ mode: RankMode) -> BoardStanding? {
         mode == .today ? today : allTime
@@ -299,11 +361,23 @@ func parseDate(_ s: Any?) -> Date? {
 
 enum CLI {
     static let candidates = [
-        "/usr/local/bin/tokens",
         "/opt/homebrew/bin/tokens",
+        "/usr/local/bin/tokens",
         NSHomeDirectory() + "/.cargo/bin/tokens",
+        NSHomeDirectory() + "/.local/bin/tokens",
         "/usr/bin/tokens",
     ]
+
+    private static let binaryLock = NSLock()
+    private static var cachedBinaryPath: String?
+    private static var hasCachedBinary = false
+
+    static func invalidateBinaryCache() {
+        binaryLock.lock()
+        hasCachedBinary = false
+        cachedBinaryPath = nil
+        binaryLock.unlock()
+    }
 
     /// GUI apps do not inherit the shell PATH, so probe the known install sites.
     ///
@@ -313,8 +387,34 @@ enum CLI {
     /// would shadow a working native install. Prefer a slice this Mac can run,
     /// and only fall back to an unusable one so `run` can report why it failed.
     static func binary() -> String? {
+        binaryLock.lock()
+        if hasCachedBinary, let path = cachedBinaryPath,
+           FileManager.default.isExecutableFile(atPath: path) {
+            binaryLock.unlock()
+            return path
+        }
+        binaryLock.unlock()
         let usable = candidates.filter { FileManager.default.isExecutableFile(atPath: $0) }
-        return usable.first { runsNatively($0) } ?? usable.first
+        let chosen = usable.first { runsNatively($0) } ?? usable.first
+        binaryLock.lock()
+        cachedBinaryPath = chosen
+        hasCachedBinary = chosen != nil
+        binaryLock.unlock()
+        return chosen
+    }
+
+    static func version() -> String? {
+        guard let r = run(["--version"], timeout: 10), r.status == 0,
+              let text = String(data: r.out, encoding: .utf8)
+        else { return nil }
+        return CLIVersionParser.parse(text)
+    }
+
+    static func isServeRunning() -> Bool? {
+        guard let r = run(["status"], timeout: 10), r.status == 0,
+              let text = String(data: r.out, encoding: .utf8)
+        else { return nil }
+        return CLIServiceStatusParser.isServeRunning(text)
     }
 
     private static let nativeCPUType: UInt32 = {
@@ -445,7 +545,7 @@ final class API {
               ["http", "https"].contains(url.scheme?.lowercased() ?? "")
         else { return done(.failure(.invalidConfiguration)) }
         var req = URLRequest(url: url)
-        req.setValue("TokensBar/1.10", forHTTPHeaderField: "User-Agent")
+        req.setValue("TokensBar/\(Updates.currentVersion)", forHTTPHeaderField: "User-Agent")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if authenticated, let token = ReadTokenStore.load(config) {
             // ReadTokenStore only returns credentials for this HTTPS origin/user.
@@ -507,6 +607,7 @@ final class API {
                     // with usage must never render as an empty cell.
                     let level = max(int(entry, "intensity"), tokens > 0 ? 1 : 0)
                     var clientMessages = 0
+                    var dayInput = 0, dayOutput = 0, dayCacheRead = 0, dayCacheWrite = 0, dayReasoning = 0
                     var modelTotals: [String: (tokens: Int, cost: Double)] = [:]
                     let clients = (entry["clients"] as? [[String: Any]] ?? []).compactMap {
                         c -> ContribSlice? in
@@ -522,10 +623,19 @@ final class API {
                             modelTotals[model] = e
                         }
                         let b = c["tokens"] as? [String: Any]
+                        let inp = int(b, "input")
+                        let outp = int(b, "output")
+                        let cRead = int(b, "cacheRead")
+                        let cWrite = int(b, "cacheWrite")
+                        let reas = int(b, "reasoning")
+                        dayInput += inp
+                        dayOutput += outp
+                        dayCacheRead += cRead
+                        dayCacheWrite += cWrite
+                        dayReasoning += reas
                         return ContribSlice(
                             name: name,
-                            tokens: int(b, "input") + int(b, "output") + int(b, "cacheRead")
-                                + int(b, "cacheWrite") + int(b, "reasoning"),
+                            tokens: inp + outp + cRead + cWrite + reas,
                             cost: dbl(c, "cost"))
                     }
                     let models = modelTotals
@@ -536,9 +646,16 @@ final class API {
                                       messages: max(int(totals, "messages"), clientMessages),
                                       level: level,
                                       clients: clients.sorted { $0.tokens > $1.tokens },
-                                      models: models)
+                                      models: models,
+                                      input: dayInput,
+                                      output: dayOutput,
+                                      cacheRead: dayCacheRead,
+                                      cacheWrite: dayCacheWrite,
+                                      reasoning: dayReasoning)
                 }
             let range = o["chartRange"] as? [String: Any]
+            let activeKeys = Set(contribs.filter { $0.tokens > 0 }.map { dayFormatter.string(from: $0.date) })
+            let streaks = computeStreaks(activeDayKeys: activeKeys, todayKey: dayFormatter.string(from: Date()))
 
             var stats = ServerStats(
                 rank: int(u, "rank"),
@@ -552,19 +669,21 @@ final class API {
                 today: nil,
                 contribs: contribs,
                 contribStart: parseDay(range?["start"]) ?? contribs.first?.date,
-                contribEnd: parseDay(range?["end"]) ?? contribs.last?.date)
+                contribEnd: parseDay(range?["end"]) ?? contribs.last?.date,
+                currentStreak: streaks.current,
+                longestStreak: streaks.longest)
 
             // `/api/users/<name>?period=today` ignores the period (it echoes
             // "all"), so a daily rank has to come from the daily board itself.
             let group = DispatchGroup()
             let lock = NSLock()
             group.enter()
-            self.findOnBoard(period: "all", username: user, fromPage: 1) {
+            self.findOnBoard(period: "all", username: user, hintRank: stats.rank) {
                 lock.lock(); stats.allTime = $0; lock.unlock()
                 group.leave()
             }
             group.enter()
-            self.findOnBoard(period: "today", username: user, fromPage: 1) {
+            self.findOnBoard(period: "today", username: user, hintRank: 0) {
                 lock.lock(); stats.today = $0; lock.unlock()
                 group.leave()
             }
@@ -572,34 +691,120 @@ final class API {
         }
     }
 
-    /// Walks leaderboard pages until the user turns up, so both the rank and the
-    /// entry directly above it come from the same ordered list.
-    private func findOnBoard(period: String, username: String, fromPage page: Int,
-                             maxPages: Int = 6,
+    /// Locates the user on a leaderboard. When `hintRank > 0` (from `/api/users`),
+    /// jumps straight to the target page instead of walking pages 1..N serially,
+    /// bypassing the 600-user scan cap and preserving the `#101`/`#201` neighbour
+    /// across page boundaries.
+    private func findOnBoard(period: String, username: String, hintRank: Int,
                              _ done: @escaping (BoardStanding?) -> Void) {
-        getJSON("/api/leaderboard?period=\(period)&limit=100&page=\(page)") { [weak self] result in
+        if hintRank > 0 {
+            let page = leaderboardPage(forRank: hintRank, pageSize: 100)
+            fetchBoardPage(period: period, page: page) { [weak self] res in
+                guard let self, let res else { return done(nil) }
+                if let hit = findLeaderboardEntry(in: res.users, previousLast: nil,
+                                                  where: { $0.username == username }) {
+                    // If the user sits at index 0 of page 2+, fetch the preceding
+                    // page once so the person directly above them is never lost.
+                    if hit.above == nil && page > 1 {
+                        self.fetchBoardPage(period: period, page: page - 1) { prev in
+                            done(BoardStanding(rank: hit.item.rank,
+                                               totalUsers: res.totalUsers,
+                                               tokens: hit.item.tokens,
+                                               above: prev?.users.last,
+                                               below: hit.below))
+                        }
+                        return
+                    }
+                    return done(BoardStanding(rank: hit.item.rank,
+                                              totalUsers: res.totalUsers,
+                                              tokens: hit.item.tokens,
+                                              above: hit.above,
+                                              below: hit.below))
+                }
+                // Rank may have drifted across a page boundary since the profile
+                // snapshot; check the adjacent page before falling back to scan.
+                let nextTry: Int? = {
+                    if let first = res.users.first, hintRank < first.rank, page > 1 { return page - 1 }
+                    if res.hasNext { return page + 1 }
+                    if page > 1 { return page - 1 }
+                    return nil
+                }()
+                if let adj = nextTry {
+                    self.fetchBoardPage(period: period, page: adj) { adjRes in
+                        if let adjRes,
+                           let hit = findLeaderboardEntry(
+                               in: adjRes.users,
+                               previousLast: adj == page + 1 ? res.users.last : nil,
+                               where: { $0.username == username }) {
+                            if hit.above == nil && adj > 1 {
+                                self.fetchBoardPage(period: period, page: adj - 1) { prev in
+                                    done(BoardStanding(rank: hit.item.rank,
+                                                       totalUsers: adjRes.totalUsers,
+                                                       tokens: hit.item.tokens,
+                                                       above: prev?.users.last,
+                                                       below: hit.below))
+                                }
+                                return
+                            }
+                            return done(BoardStanding(rank: hit.item.rank,
+                                                      totalUsers: adjRes.totalUsers,
+                                                      tokens: hit.item.tokens,
+                                                      above: hit.above,
+                                                      below: hit.below))
+                        }
+                        self.walkBoard(period: period, username: username,
+                                       fromPage: 1, previousLast: nil, done: done)
+                    }
+                    return
+                }
+                self.walkBoard(period: period, username: username,
+                               fromPage: 1, previousLast: nil, done: done)
+            }
+            return
+        }
+        walkBoard(period: period, username: username, fromPage: 1, previousLast: nil, done: done)
+    }
+
+    private func fetchBoardPage(
+        period: String, page: Int,
+        _ done: @escaping ((users: [Neighbour], totalUsers: Int, hasNext: Bool)?) -> Void
+    ) {
+        getJSON("/api/leaderboard?period=\(period)&limit=100&page=\(page)") { result in
             guard case .success(let o) = result else { return done(nil) }
             let pg = o["pagination"] as? [String: Any]
             let totalUsers = int(pg, "totalUsers")
+            let hasNext = (pg?["hasNext"] as? Bool) ?? false
             let users = (o["users"] as? [[String: Any]] ?? []).map {
                 Neighbour(rank: int($0, "rank"),
                           username: $0["username"] as? String ?? "?",
                           tokens: int($0, "totalTokens"))
             }
-            if let i = users.firstIndex(where: { $0.username == username }) {
-                return done(BoardStanding(rank: users[i].rank,
-                                          totalUsers: totalUsers,
-                                          tokens: users[i].tokens,
-                                          above: i > 0 ? users[i - 1] : nil))
+            done((users, totalUsers, hasNext))
+        }
+    }
+
+    /// Walks leaderboard pages sequentially, passing the previous page's last
+    /// entry forward so page-boundary ranks (#101, #201, …) keep `above`.
+    private func walkBoard(period: String, username: String, fromPage page: Int,
+                           previousLast: Neighbour?, maxPages: Int = 6,
+                           done: @escaping (BoardStanding?) -> Void) {
+        fetchBoardPage(period: period, page: page) { [weak self] res in
+            guard let res else { return done(nil) }
+            if let hit = findLeaderboardEntry(in: res.users, previousLast: previousLast,
+                                              where: { $0.username == username }) {
+                return done(BoardStanding(rank: hit.item.rank,
+                                          totalUsers: res.totalUsers,
+                                          tokens: hit.item.tokens,
+                                          above: hit.above,
+                                          below: hit.below))
             }
-            let hasNext = (pg?["hasNext"] as? Bool) ?? false
-            if let self, hasNext, page < maxPages {
-                self.findOnBoard(period: period, username: username,
-                                 fromPage: page + 1, maxPages: maxPages, done)
+            if let self, res.hasNext, page < maxPages {
+                self.walkBoard(period: period, username: username, fromPage: page + 1,
+                               previousLast: res.users.last, maxPages: maxPages, done: done)
             } else {
                 // A page cap is incomplete evidence, not proof of being unranked.
-                if hasNext { return done(nil) }
-                done(BoardStanding(rank: 0, totalUsers: totalUsers, tokens: 0, above: nil))
+                if res.hasNext { return done(nil) }
+                done(BoardStanding(rank: 0, totalUsers: res.totalUsers, tokens: 0, above: nil))
             }
         }
     }
@@ -858,8 +1063,8 @@ struct Presenter {
 // MARK: - Controller
 
 final class Controller: NSObject, NSMenuDelegate {
-    private let config = Config.load()
-    private lazy var api = API(config: config)
+    private var config = Config.load()
+    private var api: API
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
 
@@ -878,6 +1083,10 @@ final class Controller: NSObject, NSMenuDelegate {
     private var busy = false
     private var update: UpdateInfo?
     private var checkingUpdate = false
+    /// Local `tokens` CLI version, latest upstream version (when newer), and serve state.
+    private var cliVersion: String?
+    private var cliUpdate: CLIUpdateInfo?
+    private var cliServeRunning: Bool?
     /// Set from the moment the download starts until the app is replaced, so the
     /// menu item cannot start a second install over the top of the first.
     private var installing = false
@@ -885,6 +1094,9 @@ final class Controller: NSObject, NSMenuDelegate {
     private var lastServerSuccess: Date?
     private var serverLoading = false
     private var serverError: APIReadError?
+    private var localLoading = false
+    private var lastLocalAttempt: Date?
+    private var lastWeekMonthScan: Date?
     /// Last leaderboard position seen, to announce climbs and slips.
     private var lastRank: RankSnapshot?
     /// A short-lived celebratory chip on the menu-bar readout after a rank move.
@@ -893,6 +1105,11 @@ final class Controller: NSObject, NSMenuDelegate {
     private var apiTimer: Timer?
     private var localTimer: Timer?
     private var updateTimer: Timer?
+    private var configWatcher: ConfigWatcher?
+    private var wakeObserver: NSObjectProtocol?
+    private let pathMonitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "ci.tokens.menubar.net", qos: .utility)
+    private var wasOffline = false
     private let workQueue = DispatchQueue(label: "ci.tokens.menubar.cli", qos: .utility)
 
     private let monoFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
@@ -903,11 +1120,21 @@ final class Controller: NSObject, NSMenuDelegate {
     private static let languageKey = "language"
 
     override init() {
+        let initial = Config.load()
+        self.config = initial
+        self.api = API(config: initial)
         super.init()
         let storedRank = UserDefaults.standard.string(forKey: Controller.rankModeKey)
         rankMode = storedRank.flatMap(RankMode.init(rawValue:)) ?? config.menuBarRank
         let storedLang = UserDefaults.standard.string(forKey: Controller.languageKey)
         L10n.current = storedLang.flatMap(Lang.init(rawValue:)) ?? config.language
+    }
+
+    deinit {
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
+        pathMonitor.cancel()
     }
 
     func start() {
@@ -923,20 +1150,116 @@ final class Controller: NSObject, NSMenuDelegate {
         }
         menu.delegate = self
         DropdownPanel.shared.onAction = { [weak self] action in self?.handle(action) }
+        ChartPopover.shared.onSwitchScope = { [weak self] scope in
+            guard let self else { return [] }
+            let models = scope == .today ? todayChartModels(self.local, self.server) : (self.server?.models ?? [])
+            return models.map(Self.datum)
+        }
+        ChartPopover.shared.onBack = { [weak self] in
+            guard let self else { return }
+            DropdownPanel.shared.show(self.panelData, from: self.statusItem.button)
+        }
+        ContribPopover.shared.onBack = { [weak self] in
+            guard let self else { return }
+            DropdownPanel.shared.show(self.panelData, from: self.statusItem.button)
+        }
         render()
 
-        refreshLocal()
+        refreshLocal(force: true)
         refreshServer()
-        apiTimer = Timer.scheduledTimer(withTimeInterval: config.apiRefreshSeconds, repeats: true) {
-            [weak self] _ in self?.refreshServer()
-        }
-        localTimer = Timer.scheduledTimer(withTimeInterval: config.localRefreshSeconds, repeats: true) {
-            [weak self] _ in self?.refreshLocal()
-        }
+        refreshCLIInfo()
+        scheduleTimers()
+        startWatchers()
         // Quiet daily check; the menu item does the same thing on demand.
         checkForUpdates(announce: false)
         updateTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) {
-            [weak self] _ in self?.checkForUpdates(announce: false)
+            [weak self] _ in
+            self?.checkForUpdates(announce: false)
+            self?.refreshCLIInfo()
+        }
+        updateTimer?.tolerance = 3600
+    }
+
+    private func scheduleTimers() {
+        apiTimer?.invalidate()
+        localTimer?.invalidate()
+        apiTimer = Timer.scheduledTimer(withTimeInterval: config.apiRefreshSeconds, repeats: true) {
+            [weak self] _ in self?.refreshServer()
+        }
+        apiTimer?.tolerance = min(30, config.apiRefreshSeconds * 0.1)
+        localTimer = Timer.scheduledTimer(withTimeInterval: config.localRefreshSeconds, repeats: true) {
+            [weak self] _ in self?.refreshLocal(force: false)
+        }
+        localTimer?.tolerance = min(15, config.localRefreshSeconds * 0.1)
+    }
+
+    private func startWatchers() {
+        let cfgDir = URL(fileURLWithPath: Config.configPath).deletingLastPathComponent().path
+        let credDir = URL(fileURLWithPath: Config.credentialsPath).deletingLastPathComponent().path
+        configWatcher = ConfigWatcher(paths: [cfgDir, credDir]) { [weak self] in
+            self?.reloadConfigIfChanged()
+        }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            // Let Wi-Fi / DNS settle briefly after wake before polling.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                self?.refreshLocal(force: true)
+                self?.refreshServer()
+                self?.refreshCLIInfo()
+            }
+        }
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let online = path.status == .satisfied
+                if !online {
+                    self.wasOffline = true
+                } else if self.wasOffline {
+                    self.wasOffline = false
+                    self.refreshServer()
+                }
+            }
+        }
+        pathMonitor.start(queue: monitorQueue)
+    }
+
+    private func reloadConfigIfChanged() {
+        let next = Config.load()
+        guard next != config else { return }
+        let accountChanged = next.username != config.username || next.apiBase != config.apiBase
+        let timersChanged = next.apiRefreshSeconds != config.apiRefreshSeconds
+            || next.localRefreshSeconds != config.localRefreshSeconds
+        config = next
+        if accountChanged {
+            api = API(config: next)
+            server = nil
+            serverFailed = false
+            serverError = nil
+            lastRank = nil
+            refreshServer()
+        }
+        if timersChanged { scheduleTimers() }
+        render()
+    }
+
+    private func refreshCLIInfo() {
+        workQueue.async { [weak self] in
+            let ver = CLI.version()
+            let serve = CLI.isServeRunning()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.cliVersion = ver
+                self.cliServeRunning = serve
+                self.render()
+                if let ver {
+                    Updates.checkCLI(current: ver) { [weak self] info in
+                        guard let self else { return }
+                        self.cliUpdate = info
+                        self.render()
+                    }
+                }
+            }
         }
     }
 
@@ -1048,14 +1371,24 @@ final class Controller: NSObject, NSMenuDelegate {
         ChartDatum(label: m.model, tokens: m.tokens, cost: m.cost)
     }
 
-    private func refreshLocal() {
+    private func refreshLocal(force: Bool = false) {
+        guard !localLoading else { return }
+        if !force, let prev = lastLocalAttempt, Date().timeIntervalSince(prev) < 20 { return }
+        localLoading = true
+        lastLocalAttempt = Date()
+        let prevTodayTokens = local.todayTokens
+        let needPeriodScan = force
+            || lastWeekMonthScan.map({ Date().timeIntervalSince($0) >= 300 }) ?? true
         workQueue.async { [weak self] in
             let today = CLI.report(["--today"])
-            let week = CLI.report(["--week"])
-            let month = CLI.report(["--month"])
+            let todayChanged = today.map { $0.tokens != prevTodayTokens } ?? false
+            let scanWeekMonth = needPeriodScan || todayChanged
+            let week = scanWeekMonth ? CLI.report(["--week"]) : nil
+            let month = scanWeekMonth ? CLI.report(["--month"]) : nil
             DispatchQueue.main.async {
                 guard let self else { return }
-                if today == nil && week == nil {
+                self.localLoading = false
+                if today == nil && (scanWeekMonth ? week == nil : self.local.updatedAt == nil) {
                     self.local.failed = true
                 } else {
                     self.local.failed = false
@@ -1066,6 +1399,9 @@ final class Controller: NSObject, NSMenuDelegate {
                     }
                     if let week { self.local.weekTokens = week.tokens; self.local.weekCost = week.cost }
                     if let month { self.local.monthTokens = month.tokens; self.local.monthCost = month.cost }
+                    if scanWeekMonth && (week != nil || month != nil) {
+                        self.lastWeekMonthScan = Date()
+                    }
                     self.local.updatedAt = Date()
                 }
                 self.render()
@@ -1142,6 +1478,9 @@ final class Controller: NSObject, NSMenuDelegate {
         data.updateTitle = updateItemTitle()
         data.updateWaiting = update?.isNewer == true
         data.canSubmit = CLI.binary() != nil
+        data.cliVersion = cliVersion
+        data.cliLatestVersion = (cliUpdate?.isNewer == true) ? cliUpdate?.latest : nil
+        data.cliServeRunning = cliServeRunning
         return data
     }
 
@@ -1200,19 +1539,25 @@ final class Controller: NSObject, NSMenuDelegate {
             guard let s = server, let from = s.contribStart, let to = s.contribEnd else { return }
             DropdownPanel.shared.close()
             ContribPopover.shared.show(days: s.contribs, start: from, end: to,
-                                       from: statusItem.button)
+                                       from: statusItem.button, interactiveNav: true)
         case .chart(let scope):
             let models = scope == .today ? todayChartModels(local, server) : (server?.models ?? [])
             guard !models.isEmpty else { return }
             DropdownPanel.shared.close()
             ChartPopover.shared.show(scope: scope, data: models.map(Self.datum),
-                                     from: statusItem.button)
+                                     from: statusItem.button, interactiveNav: true)
         case .submit:
             submitNow()
         case .refresh:
             refreshAll()
         case .readToken:
             editReadToken()
+        case .toggleMenuBarItem(let item):
+            toggleMenuBarItem(item)
+        case .editBudget:
+            editBudget()
+        case .cliUpdate:
+            cliUpdateClicked()
         case .setRank(let mode):
             use(rank: mode)
         case .setLanguage(let lang):
@@ -1387,6 +1732,11 @@ final class Controller: NSObject, NSMenuDelegate {
 
         menu.addItem(actionItem(t("action.readToken"), symbol: "key",
                                 action: #selector(editReadToken)))
+        let budgetTitle = config.dailyCostBudget > 0
+            ? t("action.budgetWith", fmtMoney(config.dailyCostBudget))
+            : t("action.budget") + " · " + t("budget.off")
+        menu.addItem(actionItem(budgetTitle, symbol: "dollarsign.circle",
+                                action: #selector(editBudget)))
         menu.addItem(.separator())
         addRankModeItems()
         addLanguageItems()
@@ -1411,6 +1761,12 @@ final class Controller: NSObject, NSMenuDelegate {
                                  action: #selector(updateItemClicked), key: "u")
         updates.isEnabled = !checkingUpdate && !installing
         menu.addItem(updates)
+
+        if let cli = cliUpdate, cli.isNewer {
+            menu.addItem(actionItem(t("cli.updateAvailable", cli.latest),
+                                    symbol: "terminal.fill",
+                                    action: #selector(cliUpdateClicked)))
+        }
 
         menu.addItem(actionItem(t("action.support"), symbol: "cup.and.saucer.fill",
                                 action: #selector(openSupport)))
@@ -1512,8 +1868,72 @@ final class Controller: NSObject, NSMenuDelegate {
 
 
     @objc private func refreshAll() {
-        refreshLocal()
+        CLI.invalidateBinaryCache()
+        reloadConfigIfChanged()
+        refreshLocal(force: true)
         refreshServer()
+        refreshCLIInfo()
+    }
+
+    private func toggleMenuBarItem(_ item: String) {
+        let canonical = ["tokens", "cost", "rank"]
+        guard canonical.contains(item) else { return }
+        var current = config.menuBarItems
+        if let idx = current.firstIndex(of: item) {
+            guard current.count > 1 else { return }
+            current.remove(at: idx)
+        } else {
+            current.append(item)
+            current.sort { (canonical.firstIndex(of: $0) ?? 9) < (canonical.firstIndex(of: $1) ?? 9) }
+        }
+        config.menuBarItems = current
+        Config.saveOverrides(["menuBarItems": current])
+        render()
+    }
+
+    @objc private func editBudget() {
+        DropdownPanel.shared.close()
+        let alert = NSAlert()
+        alert.messageText = t("action.budget")
+        alert.informativeText = t("budget.explain")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = t("budget.placeholder")
+        if config.dailyCostBudget > 0 {
+            field.stringValue = String(format: "%g", config.dailyCostBudget)
+        }
+        alert.accessoryView = field
+        alert.addButton(withTitle: t("budget.save"))
+        alert.addButton(withTitle: t("budget.cancel"))
+        alert.addButton(withTitle: t("budget.clear"))
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = field
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn { return }
+        let newBudget: Double
+        if response == .alertThirdButtonReturn {
+            newBudget = 0
+        } else {
+            let raw = field.stringValue
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "$", with: "")
+                .replacingOccurrences(of: ",", with: "")
+            guard !raw.isEmpty else { return }
+            guard let parsed = Double(raw), parsed.isFinite, parsed >= 0 else {
+                let invalid = NSAlert()
+                invalid.messageText = t("budget.invalid")
+                invalid.runModal()
+                return
+            }
+            newBudget = parsed
+        }
+        config.dailyCostBudget = newBudget
+        Config.saveOverrides(["dailyCostBudget": newBudget])
+        render()
+    }
+
+    @objc private func cliUpdateClicked() {
+        let cmd = "brew update && brew upgrade owo-network/brew/tokens && brew services restart tokens"
+        copyString(cmd, notice: t("cli.copiedUpgrade"))
     }
 
     @objc private func submitNow() {
@@ -1589,7 +2009,7 @@ final class Controller: NSObject, NSMenuDelegate {
         installing = true
         note(t("update.downloading", info.latest), kind: .info)
         render()
-        Installer.install(asset: asset, expecting: info.latest) { [weak self] failure in
+        Installer.install(asset: asset, checksumAsset: info.checksumAsset, expecting: info.latest) { [weak self] failure in
             guard let self else { return }
             if let failure {
                 self.installing = false
@@ -1651,13 +2071,15 @@ final class Controller: NSObject, NSMenuDelegate {
     /// The official live-card embed, as the README snippet the site's dialog copies.
     @objc private func copyEmbedMarkdown() {
         guard !config.username.isEmpty else { return }
-        copyString(Embed.markdown(user: config.username, dark: menuBarIsDark), notice: t("card.copiedMarkdown"))
+        copyString(Embed.markdown(user: config.username, apiBase: config.apiBase, dark: menuBarIsDark),
+                   notice: t("card.copiedMarkdown"))
     }
 
     /// The live-card image URL on its own, for an HTML <img> or a chat that unfurls it.
     @objc private func copyEmbedURL() {
         guard !config.username.isEmpty else { return }
-        copyString(Embed.imageURL(user: config.username, dark: menuBarIsDark), notice: t("card.copiedURL"))
+        copyString(Embed.imageURL(user: config.username, apiBase: config.apiBase, dark: menuBarIsDark),
+                   notice: t("card.copiedURL"))
     }
 
     /// A locally-drawn PNG of the card straight onto the clipboard, for pasting
@@ -1933,7 +2355,7 @@ func runSelfUpdate() -> Never {
     // The callback hops to the main queue, which this thread is blocking, so the
     // wait has to happen off it.
     DispatchQueue.global().async {
-        Installer.install(asset: asset, expecting: info.latest) { failure = $0; install.signal() }
+        Installer.install(asset: asset, checksumAsset: info.checksumAsset, expecting: info.latest) { failure = $0; install.signal() }
     }
     let deadline = Date().addingTimeInterval(180)
     while failure == nil, Date() < deadline {

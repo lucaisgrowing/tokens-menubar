@@ -6,14 +6,23 @@
 // replace its own bundle while its pages are still mapped.
 
 import AppKit
+import CryptoKit
 import Foundation
 
 enum Installer {
+    private static let session: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 30
+        cfg.timeoutIntervalForResource = 150
+        return URLSession(configuration: cfg)
+    }()
+
     enum Failure: LocalizedError {
         /// The bundle's directory is not writable — /Applications is root:admin,
         /// so a standard account cannot swap the app there.
         case readOnly(String)
         case download
+        case checksum
         case unpack
         /// Local filesystem or spawn trouble on our side, not the download's.
         case setup
@@ -26,6 +35,7 @@ enum Installer {
             switch self {
             case .readOnly(let path): return t("install.readOnly", path)
             case .download: return t("install.download")
+            case .checksum: return t("install.checksum")
             case .unpack: return t("install.unpack")
             case .setup: return t("install.setup")
             case .contents: return t("install.contents")
@@ -43,7 +53,7 @@ enum Installer {
     /// Downloads, unpacks and verifies the release, then leaves a detached script
     /// waiting on this process to exit before it swaps the bundle and relaunches.
     /// On success the caller must terminate — nothing else will trigger the swap.
-    static func install(asset: URL, expecting version: String,
+    static func install(asset: URL, checksumAsset: URL? = nil, expecting version: String,
                         done: @escaping (Failure?) -> Void) {
         let fm = FileManager.default
         func finish(_ f: Failure?) { DispatchQueue.main.async { done(f) } }
@@ -52,10 +62,10 @@ enum Installer {
         }
         var req = URLRequest(url: asset)
         req.timeoutInterval = 120
-        req.setValue("TokensBar", forHTTPHeaderField: "User-Agent")
+        req.setValue("TokensBar/\(Updates.currentVersion)", forHTTPHeaderField: "User-Agent")
         // A download task, not `data`: the zip goes straight to disk instead of
         // through memory, and URLSession follows GitHub's redirect to its CDN.
-        URLSession(configuration: .ephemeral).downloadTask(with: req) { tmp, resp, _ in
+        session.downloadTask(with: req) { tmp, resp, _ in
             guard let tmp, (resp as? HTTPURLResponse)?.statusCode == 200 else {
                 return finish(.download)
             }
@@ -68,28 +78,67 @@ enum Installer {
             let zip = work.appendingPathComponent("TokensBar.app.zip")
             guard (try? fm.moveItem(at: tmp, to: zip)) != nil else { return finish(.setup) }
 
-            // ditto, to match the `ditto -c -k --keepParent` the release is packed
-            // with: it round-trips bundle metadata that unzip does not.
-            guard run("/usr/bin/ditto", ["-x", "-k", zip.path, work.path]) == 0 else {
-                return finish(.unpack)
+            let proceed: (Failure?) -> Void = { checkFailure in
+                if let checkFailure {
+                    try? fm.removeItem(at: work)
+                    return finish(checkFailure)
+                }
+                // ditto, to match the `ditto -c -k --keepParent` the release is packed
+                // with: it round-trips bundle metadata that unzip does not.
+                guard run("/usr/bin/ditto", ["-x", "-k", zip.path, work.path]) == 0 else {
+                    try? fm.removeItem(at: work)
+                    return finish(.unpack)
+                }
+
+                let new = work.appendingPathComponent("TokensBar.app")
+                guard fm.fileExists(atPath: new.appendingPathComponent("Contents/MacOS/TokensBar").path),
+                      let plist = NSDictionary(contentsOf: new.appendingPathComponent("Contents/Info.plist")),
+                      (plist["CFBundleIdentifier"] as? String) == "ci.tokens.menubar"
+                else {
+                    try? fm.removeItem(at: work)
+                    return finish(.contents)
+                }
+                // The download has to be the version the check advertised. Without this
+                // the app would happily install whatever arrived under that URL.
+                let got = plist["CFBundleShortVersionString"] as? String ?? "?"
+                guard got == version.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+                else {
+                    try? fm.removeItem(at: work)
+                    return finish(.version(got))
+                }
+
+                guard let script = writeSwapScript(new: new, work: work) else {
+                    try? fm.removeItem(at: work)
+                    return finish(.setup)
+                }
+                let helper = Process()
+                helper.executableURL = URL(fileURLWithPath: "/bin/sh")
+                helper.arguments = [script.path]
+                guard (try? helper.run()) != nil else {
+                    try? fm.removeItem(at: work)
+                    return finish(.setup)
+                }
+                finish(nil)
             }
 
-            let new = work.appendingPathComponent("TokensBar.app")
-            guard fm.fileExists(atPath: new.appendingPathComponent("Contents/MacOS/TokensBar").path),
-                  let plist = NSDictionary(contentsOf: new.appendingPathComponent("Contents/Info.plist"))
-            else { return finish(.contents) }
-            // The download has to be the version the check advertised. Without this
-            // the app would happily install whatever arrived under that URL.
-            let got = plist["CFBundleShortVersionString"] as? String ?? "?"
-            guard got == version.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
-            else { return finish(.version(got)) }
+            guard let checksumAsset else { return proceed(nil) }
+            verifyChecksum(zip: zip, checksumURL: checksumAsset, done: proceed)
+        }.resume()
+    }
 
-            guard let script = writeSwapScript(new: new, work: work) else { return finish(.setup) }
-            let helper = Process()
-            helper.executableURL = URL(fileURLWithPath: "/bin/sh")
-            helper.arguments = [script.path]
-            guard (try? helper.run()) != nil else { return finish(.setup) }
-            finish(nil)
+    private static func verifyChecksum(zip: URL, checksumURL: URL,
+                                       done: @escaping (Failure?) -> Void) {
+        var req = URLRequest(url: checksumURL)
+        req.timeoutInterval = 20
+        req.setValue("TokensBar/\(Updates.currentVersion)", forHTTPHeaderField: "User-Agent")
+        session.dataTask(with: req) { data, resp, _ in
+            guard let data, (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let text = String(data: data, encoding: .utf8),
+                  let expected = SHA256SumsParser.expectedHash(for: "TokensBar.app.zip", in: text),
+                  let zipData = try? Data(contentsOf: zip)
+            else { return done(.checksum) }
+            let actual = SHA256.hash(data: zipData).map { String(format: "%02x", $0) }.joined()
+            done(actual == expected ? nil : .checksum)
         }.resume()
     }
 
@@ -131,6 +180,7 @@ enum Installer {
         xattr -dr com.apple.quarantine "$target" 2>/dev/null
         open "$target"
         rm -rf "$work"
+        rm -f "$0"
         """
         guard (try? body.write(to: script, atomically: true, encoding: .utf8)) != nil else {
             return nil

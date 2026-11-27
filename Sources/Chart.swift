@@ -407,21 +407,32 @@ final class ChartPopover: NSObject {
     private let popover = NSPopover()
     private let chart = ChartView()
     private let heading = NSTextField(labelWithString: "")
+    private var backButton: NSButton!
+    private var scopeToggle: NSSegmentedControl!
     private var toggle: NSSegmentedControl!
+    private var headingLeading: NSLayoutConstraint!
     private var chartHeight: NSLayoutConstraint!
     private var scope: ChartScope = .today
     private var data: [ChartDatum] = []
     private var metric: ChartMetric = .tokens
     private var built = false
 
+    /// Optional callbacks when opened from the drawn panel: lets the user switch
+    /// between Today and Lifetime or jump back to the main panel without re-clicking
+    /// the status bar icon.
+    var onSwitchScope: ((ChartScope) -> [ChartDatum])?
+    var onBack: (() -> Void)?
+
     private let width: CGFloat = 380
     private let headerHeight: CGFloat = 44
 
-    func show(scope: ChartScope, data: [ChartDatum], from anchor: NSView?) {
+    func show(scope: ChartScope, data: [ChartDatum], from anchor: NSView?,
+              interactiveNav: Bool = false) {
         guard let anchor else { return }
         self.scope = scope
         self.data = data
         build()
+        setNavVisible(interactiveNav)
         localise()
         reload()
         NSApp.activate(ignoringOtherApps: true)
@@ -443,13 +454,40 @@ final class ChartPopover: NSObject {
         reload()
     }
 
+    private func setNavVisible(_ visible: Bool) {
+        backButton.isHidden = !visible || onBack == nil
+        let showScope = visible && onSwitchScope != nil
+        scopeToggle.isHidden = !showScope
+        heading.isHidden = showScope
+        headingLeading.constant = backButton.isHidden ? 18 : 36
+    }
+
     private func build() {
         guard !built else { return }
         built = true
 
+        let back = NSButton(image: NSImage(systemSymbolName: "chevron.left",
+                                           accessibilityDescription: t("menu.back")) ?? NSImage(),
+                            target: self, action: #selector(backClicked))
+        back.isBordered = false
+        back.contentTintColor = .secondaryLabelColor
+        back.translatesAutoresizingMaskIntoConstraints = false
+        back.isHidden = true
+        self.backButton = back
+
         heading.font = .systemFont(ofSize: 12, weight: .semibold)
         heading.textColor = .secondaryLabelColor
         heading.translatesAutoresizingMaskIntoConstraints = false
+
+        let scopeToggle = NSSegmentedControl(
+            labels: [t("chart.scopeToday"), t("chart.scopeLifetime")],
+            trackingMode: .selectOne, target: self, action: #selector(scopeChanged(_:)))
+        scopeToggle.selectedSegment = 0
+        scopeToggle.segmentStyle = .capsule
+        scopeToggle.controlSize = .small
+        scopeToggle.translatesAutoresizingMaskIntoConstraints = false
+        scopeToggle.isHidden = true
+        self.scopeToggle = scopeToggle
 
         let toggle = NSSegmentedControl(labels: [t("chart.tokens"), t("chart.cost")],
                                         trackingMode: .selectOne,
@@ -464,12 +502,21 @@ final class ChartPopover: NSObject {
         chartHeight = chart.heightAnchor.constraint(equalToConstant: 300)
 
         let content = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 344))
+        content.addSubview(back)
         content.addSubview(heading)
+        content.addSubview(scopeToggle)
         content.addSubview(toggle)
         content.addSubview(chart)
+        headingLeading = heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18)
         NSLayoutConstraint.activate([
-            heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
+            back.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 14),
+            back.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
+            back.widthAnchor.constraint(equalToConstant: 18),
+            back.heightAnchor.constraint(equalToConstant: 18),
+            headingLeading,
             heading.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
+            scopeToggle.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
+            scopeToggle.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
             toggle.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
             toggle.topAnchor.constraint(equalTo: content.topAnchor, constant: 12),
             chart.topAnchor.constraint(equalTo: toggle.bottomAnchor, constant: 6),
@@ -488,6 +535,9 @@ final class ChartPopover: NSObject {
     private func localise() {
         toggle.setLabel(t("chart.tokens"), forSegment: 0)
         toggle.setLabel(t("chart.cost"), forSegment: 1)
+        scopeToggle.setLabel(t("chart.scopeToday"), forSegment: 0)
+        scopeToggle.setLabel(t("chart.scopeLifetime"), forSegment: 1)
+        scopeToggle.selectedSegment = scope == .lifetime ? 1 : 0
         heading.stringValue = t(scope.titleKey)
     }
 
@@ -496,6 +546,21 @@ final class ChartPopover: NSObject {
         chart.slices = chartSlices(data, metric: metric)
         chartHeight.constant = chart.fittingHeight
         popover.contentSize = NSSize(width: width, height: headerHeight + chart.fittingHeight)
+    }
+
+    @objc private func backClicked() {
+        popover.performClose(nil)
+        onBack?()
+    }
+
+    @objc private func scopeChanged(_ sender: NSSegmentedControl) {
+        let next: ChartScope = sender.selectedSegment == 1 ? .lifetime : .today
+        guard next != scope else { return }
+        scope = next
+        if let fetched = onSwitchScope?(scope) { data = fetched }
+        localise()
+        reload()
+        chart.animateIn()
     }
 
     @objc private func metricChanged(_ sender: NSSegmentedControl) {
@@ -515,6 +580,7 @@ final class ChartPopover: NSObject {
         self.data = data
         self.metric = metric
         build()
+        setNavVisible(false)
         localise()
         toggle.selectedSegment = metric == .cost ? 1 : 0
         reload()

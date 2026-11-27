@@ -65,4 +65,50 @@ for (first, expected) in [("2025-10-27", [10, 11, 12, 1]),
 expect(heatmapVisibleMonthIndices(positions: [0, 13, 65], widths: [25, 25, 25], rightEdge: 100) == [1, 2], "favor next month over short opening month")
 expect(heatmapVisibleMonthIndices(positions: [0], widths: [25], rightEdge: 24).isEmpty, "skip clipped final label")
 expect(heatmapVisibleMonthIndices(positions: [0], widths: [], rightEdge: 100).isEmpty, "mismatched labels rejected")
+
+// Version comparison.
+expect(isNewerVersion("v1.12.0", than: "1.11.1"), "newer minor")
+expect(isNewerVersion("27.4.1", than: "27.1.1"), "newer cli version")
+expect(!isNewerVersion("1.11.1", than: "1.11.1"), "equal version")
+expect(!isNewerVersion("1.9.9", than: "1.10.0"), "numeric not lexicographic")
+
+// Leaderboard pagination & #101 boundary preservation.
+expect(leaderboardPage(forRank: 1) == 1, "rank 1 on page 1")
+expect(leaderboardPage(forRank: 100) == 1, "rank 100 on page 1")
+expect(leaderboardPage(forRank: 101) == 2, "rank 101 on page 2")
+expect(leaderboardPage(forRank: 650) == 7, "rank 650 beyond old 6-page cap")
+let boundaryHit = findLeaderboardEntry(in: ["u101", "u102"], previousLast: "u100") { $0 == "u101" }
+expect(boundaryHit?.item == "u101", "boundary item matched")
+expect(boundaryHit?.above == "u100", "boundary #101 keeps #100 from previous page")
+expect(boundaryHit?.below == "u102", "boundary captures trailing neighbour")
+let midHit = findLeaderboardEntry(in: ["u1", "u2", "u3"], previousLast: nil) { $0 == "u2" }
+expect(midHit?.above == "u1" && midHit?.below == "u3", "in-page neighbours")
+
+// UTC active-day streaks.
+let s1 = computeStreaks(activeDayKeys: ["2026-11-25", "2026-11-26", "2026-11-27"], todayKey: "2026-11-27")
+expect(s1.current == 3 && s1.longest == 3, "streak active today")
+let s2 = computeStreaks(activeDayKeys: ["2026-11-24", "2026-11-25", "2026-11-26"], todayKey: "2026-11-27")
+expect(s2.current == 3 && s2.longest == 3, "streak stays alive before today's first submit")
+let s3 = computeStreaks(activeDayKeys: ["2026-11-20", "2026-11-21", "2026-11-22", "2026-11-25"], todayKey: "2026-11-27")
+expect(s3.current == 0 && s3.longest == 3, "broken streak retains longest")
+let s4 = computeStreaks(activeDayKeys: [], todayKey: "2026-11-27")
+expect(s4.current == 0 && s4.longest == 0, "empty streak")
+
+// Prompt cache hit rate.
+expect(cacheHitRate(input: 100, cacheRead: 900, cacheWrite: 0) == 0.9, "90% cache hit")
+expect(cacheHitRate(input: 100, cacheRead: 0, cacheWrite: 0) == nil, "no cache reads returns nil")
+
+// CLI version & serve status parsers.
+expect(CLIVersionParser.parse("tokens 27.4.1\n") == "27.4.1", "parse tokens --version")
+expect(CLIVersionParser.parse("invalid output") == nil, "reject non-version")
+expect(CLIServiceStatusParser.isServeRunning("  Service: tokens serve running (pid 792)\n"), "detect running serve")
+expect(!CLIServiceStatusParser.isServeRunning("  Service: stopped\n"), "detect stopped serve")
+
+// SHA256SUMS.txt parser.
+let sampleHash = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+let sums = "\(sampleHash)  TokensBar.app.zip\n"
+expect(SHA256SumsParser.expectedHash(for: "TokensBar.app.zip", in: sums) == sampleHash, "parse sha256sums")
+expect(SHA256SumsParser.expectedHash(for: "other.zip", in: sums) == nil, "ignore other file")
+expect(SHA256SumsParser.expectedHash(for: "TokensBar.app.zip", in: "notahash  TokensBar.app.zip") == nil, "reject bad digest")
+
 print("PASS: \(checks) pure-Swift regression checks")

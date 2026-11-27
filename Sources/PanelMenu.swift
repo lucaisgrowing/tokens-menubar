@@ -32,10 +32,12 @@ private struct MenuLayout {
     var height: CGFloat = 0
     var back = NSRect.zero
     var title = NSRect.zero
+    /// Rounded section cards grouping related rows (macOS Settings style).
+    var groups: [NSRect] = []
     /// One entry per row, separators included, so indices line up with the rows.
     var rows: [NSRect] = []
     var pills: [[NSRect]] = []
-    var rules: [CGFloat] = []
+    var dividers: [NSRect] = []
     var hint = NSRect.zero
     var version = NSRect.zero
 }
@@ -44,8 +46,8 @@ final class PanelMenuView: NSView {
     var data = PanelData() { didSet { invalidate() } }
     var onAction: ((PanelAction) -> Void)?
 
-    private let pad: CGFloat = 20
-    private let rowHeight: CGFloat = 30
+    private let pad: CGFloat = 16
+    private let rowHeight: CGFloat = 34
 
     private var cache: MenuLayout?
     /// Filled by `geometry()`, so it is never out of step with the rects.
@@ -57,8 +59,8 @@ final class PanelMenuView: NSView {
 
     override var isFlipped: Bool { true }
 
-    private let titleFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
-    private let rowFont = NSFont.systemFont(ofSize: 12.5)
+    private let titleFont = NSFont.systemFont(ofSize: 13.5, weight: .semibold)
+    private let rowFont = NSFont.systemFont(ofSize: 12.5, weight: .regular)
     private let pillFont = NSFont.systemFont(ofSize: 11, weight: .medium)
     private let smallFont = NSFont.systemFont(ofSize: 11)
 
@@ -95,6 +97,21 @@ final class PanelMenuView: NSView {
                                 on: $0 == data.primaryMode)
                            }),
                            hint: t("hint.rank")))
+        out.append(MenuRow(symbol: "menubar.rectangle", title: t("action.menuBarItems"),
+                           kind: .pills([
+                               (label: t("item.tokens"), action: .toggleMenuBarItem("tokens"),
+                                on: data.menuBarItems.contains("tokens")),
+                               (label: t("item.cost"), action: .toggleMenuBarItem("cost"),
+                                on: data.menuBarItems.contains("cost")),
+                               (label: t("item.rank"), action: .toggleMenuBarItem("rank"),
+                                on: data.menuBarItems.contains("rank")),
+                           ]),
+                           hint: t("hint.menuBarItems")))
+        let budgetTitle = data.dailyBudget > 0
+            ? t("action.budgetWith", fmtMoney(data.dailyBudget))
+            : t("action.budget") + " · " + t("budget.off")
+        out.append(MenuRow(symbol: "dollarsign.circle", title: budgetTitle,
+                           kind: .action(.editBudget), hint: t("hint.budget")))
         out.append(MenuRow(symbol: "globe", title: t("action.language"),
                            kind: .pills(Lang.allCases.map {
                                (label: $0.displayName, action: .setLanguage($0),
@@ -119,6 +136,12 @@ final class PanelMenuView: NSView {
             symbol: data.updateWaiting ? "arrow.down.circle.fill" : "arrow.down.circle",
             title: data.updateTitle.isEmpty ? t("action.checkUpdates") : data.updateTitle,
             kind: .action(.updates), hint: t("hint.updates"), accented: data.updateWaiting))
+        if let cliLatest = data.cliLatestVersion, !cliLatest.isEmpty {
+            out.append(MenuRow(symbol: "terminal.fill",
+                               title: t("cli.updateAvailable", cliLatest),
+                               kind: .action(.cliUpdate),
+                               hint: t("cli.hintUpdate"), accented: true))
+        }
         out.append(MenuRow(symbol: "cup.and.saucer.fill", title: t("action.support"),
                            kind: .action(.support), hint: t("hint.support")))
         out.append(MenuRow())
@@ -134,34 +157,45 @@ final class PanelMenuView: NSView {
         let w = bounds.width > 1 ? bounds.width : PanelView.width
         let inner = w - pad * 2
         var l = MenuLayout()
-        var y: CGFloat = 12
+        var y: CGFloat = 14
 
-        l.back = NSRect(x: pad - 3, y: y - 1, width: 18, height: 20)
-        l.title = NSRect(x: pad + 19, y: y + 1, width: inner - 19, height: 18)
-        y += 30
-        l.rules.append(y)
-        y += 9
+        l.back = NSRect(x: pad, y: y - 2, width: 26, height: 26)
+        l.title = NSRect(x: pad + 34, y: y + 2, width: inner - 34, height: 18)
+        y += 34
 
         rows = buildRows()
+        var groupStart: CGFloat? = nil
+        var prevWasRow = false
+
+        func closeGroup() {
+            if let start = groupStart {
+                l.groups.append(NSRect(x: pad, y: start, width: inner, height: y - start))
+                groupStart = nil
+            }
+            prevWasRow = false
+        }
+
         for row in rows {
             if case .separator = row.kind {
-                l.rows.append(NSRect(x: pad, y: y + 6, width: inner, height: 1))
+                closeGroup()
+                l.rows.append(.zero)
                 l.pills.append([])
-                l.rules.append(y + 6)
-                y += 13
+                y += 10
                 continue
             }
-            let rect = NSRect(x: pad - 6, y: y, width: inner + 12, height: rowHeight)
+            if groupStart == nil { groupStart = y }
+            if prevWasRow {
+                l.dividers.append(NSRect(x: pad + 38, y: y, width: inner - 48, height: 0.75))
+            }
+            let rect = NSRect(x: pad, y: y, width: inner, height: rowHeight)
             l.rows.append(rect)
             if case .pills(let choices) = row.kind {
-                // Laid out from the right edge inwards, so the widest label decides
-                // the group's width rather than the group deciding the label.
                 var pills: [NSRect] = []
-                var x = rect.maxX - 6
+                var x = rect.maxX - 10
                 for choice in choices.reversed() {
-                    let width = ceil(measure(choice.label, font: pillFont).width) + 18
+                    let width = ceil(measure(choice.label, font: pillFont).width) + 16
                     x -= width
-                    pills.insert(NSRect(x: x, y: rect.minY + 4, width: width, height: 22), at: 0)
+                    pills.insert(NSRect(x: x, y: rect.minY + 6, width: width, height: 22), at: 0)
                     x -= 5
                 }
                 l.pills.append(pills)
@@ -169,15 +203,15 @@ final class PanelMenuView: NSView {
                 l.pills.append([])
             }
             y += rowHeight
+            prevWasRow = true
         }
+        closeGroup()
 
-        y += 8
-        l.rules.append(y)
-        y += 10
-        l.hint = NSRect(x: pad, y: y, width: inner, height: 14)
-        y += 17
-        l.version = NSRect(x: pad, y: y, width: inner, height: 13)
-        y += 13 + 12
+        y += 12
+        l.hint = NSRect(x: pad + 2, y: y, width: inner - 4, height: 14)
+        y += 18
+        l.version = NSRect(x: pad + 2, y: y, width: inner - 4, height: 13)
+        y += 13 + 14
 
         l.height = y
         cache = l
@@ -226,24 +260,32 @@ final class PanelMenuView: NSView {
         let accent = tokensAccent
         defer {
             if let rect = pressedRect {
-                fill(rect, radius: 7, colour: accent.withAlphaComponent(0.14))
-                stroke(rect, radius: 7, colour: accent.withAlphaComponent(0.35))
+                fill(rect.insetBy(dx: 2, dy: 2), radius: 8, colour: accent.withAlphaComponent(0.14))
+                stroke(rect.insetBy(dx: 2, dy: 2), radius: 8, colour: accent.withAlphaComponent(0.38))
             }
         }
 
-        // Pills paint their own surface, so they pick the hover colour themselves
-        // rather than being washed over twice.
-        let pillRects = l.pills.flatMap { $0 }
-        if let rect = hoveredRect, !pillRects.contains(rect) {
-            fill(rect, radius: 7, colour: panelHover)
+        // Back button + title
+        let backHov = hoveredRect == l.back.union(l.title)
+        fill(l.back, radius: 7, colour: backHov ? panelSurfaceHover : panelSurface)
+        stroke(l.back, radius: 7, colour: panelBorder, width: 0.75)
+        icon("chevron.left", in: l.back, size: 11,
+             colour: backHov ? .labelColor : .secondaryLabelColor)
+        text(t("menu.title"), in: l.title, font: titleFont)
+
+        // Elevated inset grouped cards
+        for group in l.groups {
+            drawCard(group, radius: 11)
         }
-        for y in l.rules {
-            fill(NSRect(x: pad, y: y, width: bounds.width - pad * 2, height: 1),
-                 radius: 0.5, colour: panelRule)
+        for div in l.dividers {
+            fill(div, radius: 0, colour: panelRule)
         }
 
-        icon("chevron.left", in: l.back, size: 11, colour: .secondaryLabelColor)
-        text(t("menu.title"), in: l.title, font: titleFont)
+        // Row hover highlight (clipped inside the group softly)
+        let pillRects = l.pills.flatMap { $0 }
+        if let rect = hoveredRect, !pillRects.contains(rect), rect != l.back.union(l.title) {
+            fill(rect.insetBy(dx: 3, dy: 2), radius: 8, colour: panelHover)
+        }
 
         for (i, row) in rows.enumerated() where l.rows.indices.contains(i) {
             if case .separator = row.kind { continue }
@@ -252,35 +294,58 @@ final class PanelMenuView: NSView {
 
         text(hintText, in: l.hint, font: smallFont,
              colour: hovered == nil ? .secondaryLabelColor : .labelColor)
-        text(t("menu.version", Updates.currentVersion), in: l.version, font: smallFont,
+        let versionLine: String
+        if let cliVer = data.cliVersion, !cliVer.isEmpty {
+            if let serve = data.cliServeRunning {
+                versionLine = t("menu.versionCLIServe", Updates.currentVersion, cliVer,
+                                t(serve ? "cli.serveOn" : "cli.serveOff"))
+            } else {
+                versionLine = t("menu.versionCLI", Updates.currentVersion, cliVer)
+            }
+        } else {
+            versionLine = t("menu.version", Updates.currentVersion)
+        }
+        text(versionLine, in: l.version, font: smallFont,
              colour: .tertiaryLabelColor)
     }
 
     private func drawRow(_ row: MenuRow, in rect: NSRect, pills: [NSRect], accent: NSColor) {
         let dim = !row.enabled
+        let isQuit: Bool = {
+            if case .action(.quit) = row.kind { return true }
+            return false
+        }()
+        let badgeRect = NSRect(x: rect.minX + 10, y: rect.midY - 11, width: 22, height: 22)
+        let badgeTint: NSColor = dim ? panelCard
+            : isQuit ? NSColor.systemRed.withAlphaComponent(0.13)
+            : row.accented ? accent.withAlphaComponent(0.18)
+            : accent.withAlphaComponent(0.11)
         let glyph: NSColor = dim ? .tertiaryLabelColor
-            : (row.accented ? tokensAccentInk : .secondaryLabelColor)
-        icon(row.symbol, in: NSRect(x: rect.minX + 8, y: rect.midY - 9, width: 18, height: 18),
-             size: 13, colour: glyph)
+            : isQuit ? .systemRed
+            : (row.accented ? tokensAccentInk : tokensAccentInk.withAlphaComponent(0.92))
+        fill(badgeRect, radius: 6, colour: badgeTint)
+        icon(row.symbol, in: badgeRect, size: 11.5, colour: glyph)
 
         // The title stops where the row's own control begins, so a long localised
         // title truncates instead of running under the pills.
-        let right = pills.first?.minX ?? (rect.maxX - (row.isToggle ? 46 : 8))
-        let x = rect.minX + 32
+        let right = pills.first?.minX ?? (rect.maxX - (row.isToggle ? 50 : 12))
+        let x = rect.minX + 39
         text(row.title,
              in: NSRect(x: x, y: rect.midY - 8, width: max(40, right - 8 - x), height: 16),
              font: rowFont, colour: dim ? .tertiaryLabelColor
+                 : isQuit ? .systemRed
                  : (row.accented ? tokensAccentInk : .labelColor))
 
         switch row.kind {
         case .pills(let choices):
             for (j, choice) in choices.enumerated() where pills.indices.contains(j) {
                 let r = pills[j]
-                // An off pill on hover goes a step darker than its resting card, not
-                // the row wash: the two surfaces are 2% apart and would not read.
-                let surface = choice.on ? accent
-                    : (hoveredRect == r ? panelTrack : panelCard)
-                fill(r, radius: 7, colour: surface)
+                if choice.on {
+                    fillGradient(r, radius: 7, from: tokensAccentBright, to: accent, angle: 90)
+                } else {
+                    fill(r, radius: 7, colour: hoveredRect == r ? panelTrack : panelCard)
+                    stroke(r, radius: 7, colour: panelBorder, width: 0.5)
+                }
                 text(choice.label,
                      in: NSRect(x: r.minX, y: r.midY - 7, width: r.width, height: 15),
                      font: pillFont,
@@ -288,11 +353,25 @@ final class PanelMenuView: NSView {
                      align: .center)
             }
         case .toggle(_, let on):
-            let track = NSRect(x: rect.maxX - 38, y: rect.midY - 8, width: 30, height: 16)
-            fill(track, radius: 8, colour: on ? accent : panelTrack)
-            fill(NSRect(x: on ? track.maxX - 15 : track.minX + 1, y: track.minY + 1,
-                        width: 14, height: 14),
-                 radius: 7, colour: on ? onAccent(accent) : .secondaryLabelColor)
+            let track = NSRect(x: rect.maxX - 42, y: rect.midY - 9, width: 32, height: 18)
+            if on {
+                fillGradient(track, radius: 9, from: tokensAccentBright, to: accent, angle: 0)
+            } else {
+                fill(track, radius: 9, colour: panelTrack)
+                stroke(track, radius: 9, colour: panelBorder, width: 0.5)
+            }
+            let knob = NSRect(x: on ? track.maxX - 16 : track.minX + 2, y: track.minY + 2,
+                              width: 14, height: 14)
+            if let cg = NSGraphicsContext.current?.cgContext {
+                cg.saveGState()
+                cg.setShadow(offset: CGSize(width: 0, height: -0.5), blur: 1.5,
+                             color: NSColor(white: 0, alpha: 0.22).cgColor)
+                NSColor.white.setFill()
+                NSBezierPath(ovalIn: knob).fill()
+                cg.restoreGState()
+            } else {
+                fill(knob, radius: 7, colour: .white)
+            }
         default:
             break
         }
