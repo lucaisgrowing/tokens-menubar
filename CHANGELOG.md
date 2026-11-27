@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.12.1
+
+### Improved & Fixed
+- **Skip unnecessary leaderboard scans**: Read `user.isPrivate` from `GET /api/users/<name>` and gate `/api/leaderboard` pagination — private accounts skip public board scans (and show a clear private-account note instead of "Rank unavailable"), unranked all-time accounts skip all-time scans, and days with zero submitted usage skip today's board scan.
+- **HTTP 429 rate-limit backoff**: Parse `Retry-After` (delta-seconds and HTTP-date) with exponential fallback (`60s → 120s → 240s → 480s → 600s`), pause automatic polling/panel-open refreshes during cooldown, show the next retry clock time, and immediately abort leaderboard pagination on 429 while preserving valid profile data.
+- **Structured `tokens status --json` parsing**: Prefer `tokens status --json` over plain-text regex matching (with text fallback for older CLIs), surfacing `tokens serve` sync intervals in Actions & Settings and falling back to CLI-reported `auth.username` when `credentials.json` is absent.
+- **Private-account read-token UX**: Show configured status (`configured`) in Actions & Settings and the right-click menu, make 404/401 footer errors directly clickable to open the read-token dialog, add a quick `Open tokens.ci Settings…` link button inside the dialog, and gently confirm tokens that do not start with `tkr_`.
+- Expand offline pure-Swift regression suite from 101 to 126 assertions. Bundle version 1.12.1 (build 20).
+
 ## 1.12.0
 
 ### Redesigned UI & App Icon

@@ -78,6 +78,71 @@ enum APIReadError: Error, Equatable {
     }
 }
 
+struct APIFailure: Error, Equatable {
+    let error: APIReadError
+    let retryAfter: TimeInterval?
+
+    init(_ error: APIReadError, retryAfter: TimeInterval? = nil) {
+        self.error = error
+        self.retryAfter = retryAfter
+    }
+}
+
+/// Parses an HTTP `Retry-After` header (either integer delta-seconds or an
+/// RFC 7231 HTTP-date). Returns a clamped delay in seconds, or nil if absent/invalid.
+func parseRetryAfter(_ raw: String?, now: Date = Date()) -> TimeInterval? {
+    guard let raw else { return nil }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    if let secs = Double(trimmed), secs.isFinite, secs > 0 {
+        return min(3600, max(1, secs))
+    }
+    let formats = [
+        "EEE, dd MMM yyyy HH:mm:ss zzz",
+        "EEEE, dd-MMM-yy HH:mm:ss zzz",
+        "EEE MMM d HH:mm:ss yyyy",
+    ]
+    for format in formats {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = format
+        if let date = f.date(from: trimmed) {
+            let delta = date.timeIntervalSince(now)
+            if delta > 0 { return min(3600, max(1, delta)) }
+            return nil
+        }
+    }
+    return nil
+}
+
+/// Computes the cooldown before the next automatic server poll after HTTP 429.
+/// Honours a server-provided `Retry-After` (clamped to 10s…1h), otherwise backs
+/// off exponentially from 60s up to 10 minutes.
+func rateLimitBackoff(retryAfter: TimeInterval?, attempt: Int) -> TimeInterval {
+    if let retryAfter, retryAfter.isFinite, retryAfter > 0 {
+        return min(3600, max(10, retryAfter))
+    }
+    let power = max(0, min(attempt - 1, 5))
+    return min(600, 60 * pow(2.0, Double(power)))
+}
+
+/// Whether fetching `/api/leaderboard` for `period` can yield a standing for this user.
+/// Skips pointless multi-page scans for private profiles, unranked all-time accounts,
+/// and days with zero submitted usage.
+func shouldScanLeaderboard(isPrivateAccount: Bool, profileRank: Int,
+                           hasTodayUsage: Bool, period: String) -> Bool {
+    guard !isPrivateAccount else { return false }
+    if period == "today" { return hasTodayUsage }
+    if period == "all" { return profileRank > 0 }
+    return true
+}
+
+/// tokens.ci read tokens are minted with the `tkr_` prefix.
+func looksLikeReadToken(_ token: String) -> Bool {
+    token.hasPrefix("tkr_") && token.count > 4
+}
+
 /// Compares dot-separated numeric versions; missing components count as 0,
 /// so 1.1 and 1.1.0 are equal and 1.10 beats 1.9.
 func isNewerVersion(_ candidate: String, than current: String) -> Bool {
@@ -183,8 +248,35 @@ struct CLIVersionParser {
     }
 }
 
+struct CLIServiceStatus: Equatable {
+    let serveRunning: Bool
+    let intervalMinutes: Int?
+    let username: String?
+    let apiURL: String?
+}
+
 struct CLIServiceStatusParser {
-    /// Parses `tokens status` output to check whether `tokens serve` is running.
+    /// Parses structured `tokens status --json` output (supported by missuo/tokens).
+    static func parseJSON(_ data: Data) -> CLIServiceStatus? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let service = obj["service"] as? [String: Any],
+              let running = service["serveRunning"] as? Bool
+        else { return nil }
+        let interval = (service["intervalMinutes"] as? NSNumber)?.intValue
+        let auth = obj["auth"] as? [String: Any]
+        let loggedIn = (auth?["loggedIn"] as? Bool) ?? false
+        let rawUser = (auth?["username"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let username = (loggedIn && !(rawUser ?? "").isEmpty) ? rawUser : nil
+        let rawAPI = (obj["apiUrl"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiURL = (rawAPI?.isEmpty == false) ? rawAPI : nil
+        return CLIServiceStatus(
+            serveRunning: running,
+            intervalMinutes: interval.flatMap { $0 > 0 ? $0 : nil },
+            username: username,
+            apiURL: apiURL)
+    }
+
+    /// Fallback for older CLI versions without `status --json`.
     static func isServeRunning(_ raw: String) -> Bool {
         let lower = raw.lowercased()
         return lower.contains("tokens serve running") || lower.contains("service: running")

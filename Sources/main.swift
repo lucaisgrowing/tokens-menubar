@@ -255,6 +255,7 @@ enum RankMode: String {
 
 struct ServerStats {
     var rank: Int
+    var isPrivate: Bool = false
     var totalTokens: Int
     var totalCost: Double
     var activeDays: Int
@@ -268,6 +269,8 @@ struct ServerStats {
     var contribEnd: Date?
     var currentStreak: Int = 0
     var longestStreak: Int = 0
+    var boardRateLimited: Bool = false
+    var boardRetryAfter: TimeInterval? = nil
 
     func standing(_ mode: RankMode) -> BoardStanding? {
         mode == .today ? today : allTime
@@ -410,11 +413,19 @@ enum CLI {
         return CLIVersionParser.parse(text)
     }
 
-    static func isServeRunning() -> Bool? {
+    static func serviceStatus() -> CLIServiceStatus? {
+        if let r = run(["status", "--json"], timeout: 10), r.status == 0,
+           let parsed = CLIServiceStatusParser.parseJSON(r.out) {
+            return parsed
+        }
         guard let r = run(["status"], timeout: 10), r.status == 0,
               let text = String(data: r.out, encoding: .utf8)
         else { return nil }
-        return CLIServiceStatusParser.isServeRunning(text)
+        return CLIServiceStatus(
+            serveRunning: CLIServiceStatusParser.isServeRunning(text),
+            intervalMinutes: nil,
+            username: nil,
+            apiURL: nil)
     }
 
     private static let nativeCPUType: UInt32 = {
@@ -540,10 +551,10 @@ final class API {
     }
 
     private func getJSON(_ path: String, authenticated: Bool = false,
-                         _ done: @escaping (Result<[String: Any], APIReadError>) -> Void) {
+                         _ done: @escaping (Result<[String: Any], APIFailure>) -> Void) {
         guard let url = URL(string: config.apiBase + path), url.host != nil,
               ["http", "https"].contains(url.scheme?.lowercased() ?? "")
-        else { return done(.failure(.invalidConfiguration)) }
+        else { return done(.failure(APIFailure(.invalidConfiguration))) }
         var req = URLRequest(url: url)
         req.setValue("TokensBar/\(Updates.currentVersion)", forHTTPHeaderField: "User-Agent")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -552,16 +563,19 @@ final class API {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         session.dataTask(with: req) { data, resp, error in
-            guard error == nil else { return done(.failure(.network)) }
+            guard error == nil else { return done(.failure(APIFailure(.network))) }
             guard let response = resp as? HTTPURLResponse else {
-                return done(.failure(.invalidResponse))
+                return done(.failure(APIFailure(.invalidResponse)))
             }
             if let error = APIReadError.forStatus(response.statusCode) {
-                return done(.failure(error))
+                let retryAfter = error == .rateLimited
+                    ? parseRetryAfter(response.value(forHTTPHeaderField: "Retry-After"))
+                    : nil
+                return done(.failure(APIFailure(error, retryAfter: retryAfter)))
             }
             guard let data,
                   let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return done(.failure(.invalidResponse)) }
+            else { return done(.failure(APIFailure(.invalidResponse))) }
             done(.success(o))
         }.resume()
     }
@@ -573,22 +587,22 @@ final class API {
     }
 
     func fetchResult(on queue: DispatchQueue = .main,
-                     _ done: @escaping (Result<ServerStats, APIReadError>) -> Void) {
+                     _ done: @escaping (Result<ServerStats, APIFailure>) -> Void) {
         let user = config.username
         guard !user.isEmpty,
               let escaped = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?#")))
-        else { return queue.async { done(.failure(.invalidConfiguration)) } }
+        else { return queue.async { done(.failure(APIFailure(.invalidConfiguration))) } }
 
         getJSON("/api/users/\(escaped)", authenticated: true) { [weak self] result in
             guard let self else { return }
             let o: [String: Any]
             switch result {
-            case .failure(let error): return queue.async { done(.failure(error)) }
+            case .failure(let failure): return queue.async { done(.failure(failure)) }
             case .success(let value): o = value
             }
             guard o["user"] is [String: Any], o["stats"] is [String: Any],
                   o["contributions"] is [[String: Any]] else {
-                return queue.async { done(.failure(.invalidResponse)) }
+                return queue.async { done(.failure(APIFailure(.invalidResponse))) }
             }
             let u = o["user"] as? [String: Any]
             let s = o["stats"] as? [String: Any]
@@ -659,6 +673,7 @@ final class API {
 
             var stats = ServerStats(
                 rank: int(u, "rank"),
+                isPrivate: (u?["isPrivate"] as? Bool) ?? false,
                 totalTokens: int(s, "totalTokens"),
                 totalCost: dbl(s, "totalCost"),
                 activeDays: int(s, "activeDays"),
@@ -673,45 +688,96 @@ final class API {
                 currentStreak: streaks.current,
                 longestStreak: streaks.longest)
 
-            // `/api/users/<name>?period=today` ignores the period (it echoes
-            // "all"), so a daily rank has to come from the daily board itself.
+            // Skip leaderboard scans that cannot possibly match: private accounts
+            // are excluded from public boards, unranked all-time profiles have no
+            // board entry, and days with no submitted tokens are not on today's board.
+            let hasTodayUsage = (stats.todayDay?.tokens ?? 0) > 0
+            let scanAll = shouldScanLeaderboard(
+                isPrivateAccount: stats.isPrivate, profileRank: stats.rank,
+                hasTodayUsage: hasTodayUsage, period: "all")
+            let scanToday = shouldScanLeaderboard(
+                isPrivateAccount: stats.isPrivate, profileRank: stats.rank,
+                hasTodayUsage: hasTodayUsage, period: "today")
+
+            if !stats.isPrivate && !scanToday {
+                stats.today = BoardStanding(rank: 0, totalUsers: 0, tokens: 0, above: nil)
+            }
+            if !stats.isPrivate && !scanAll {
+                stats.allTime = BoardStanding(rank: 0, totalUsers: 0, tokens: 0, above: nil)
+            }
+
             let group = DispatchGroup()
             let lock = NSLock()
-            group.enter()
-            self.findOnBoard(period: "all", username: user, hintRank: stats.rank) {
-                lock.lock(); stats.allTime = $0; lock.unlock()
-                group.leave()
+            func noteBoardRateLimit(_ retryAfter: TimeInterval?) {
+                stats.boardRateLimited = true
+                if let r = retryAfter {
+                    stats.boardRetryAfter = max(stats.boardRetryAfter ?? 0, r)
+                }
             }
-            group.enter()
-            self.findOnBoard(period: "today", username: user, hintRank: 0) {
-                lock.lock(); stats.today = $0; lock.unlock()
-                group.leave()
+            if scanAll {
+                group.enter()
+                self.findOnBoard(period: "all", username: user, hintRank: stats.rank) { standing, rateLimited, retryAfter in
+                    lock.lock()
+                    stats.allTime = standing
+                    if rateLimited { noteBoardRateLimit(retryAfter) }
+                    lock.unlock()
+                    group.leave()
+                }
+            }
+            if scanToday {
+                group.enter()
+                self.findOnBoard(period: "today", username: user, hintRank: 0) { standing, rateLimited, retryAfter in
+                    lock.lock()
+                    stats.today = standing
+                    if rateLimited { noteBoardRateLimit(retryAfter) }
+                    lock.unlock()
+                    group.leave()
+                }
             }
             group.notify(queue: queue) { done(.success(stats)) }
         }
     }
 
+    private typealias BoardResult = (standing: BoardStanding?, rateLimited: Bool, retryAfter: TimeInterval?)
+    private typealias BoardPage = (users: [Neighbour], totalUsers: Int, hasNext: Bool)
+
     /// Locates the user on a leaderboard. When `hintRank > 0` (from `/api/users`),
     /// jumps straight to the target page instead of walking pages 1..N serially,
     /// bypassing the 600-user scan cap and preserving the `#101`/`#201` neighbour
-    /// across page boundaries.
+    /// across page boundaries. Aborts immediately on HTTP 429.
     private func findOnBoard(period: String, username: String, hintRank: Int,
-                             _ done: @escaping (BoardStanding?) -> Void) {
+                             _ done: @escaping (BoardStanding?, Bool, TimeInterval?) -> Void) {
         if hintRank > 0 {
             let page = leaderboardPage(forRank: hintRank, pageSize: 100)
-            fetchBoardPage(period: period, page: page) { [weak self] res in
-                guard let self, let res else { return done(nil) }
+            fetchBoardPage(period: period, page: page) { [weak self] result in
+                guard let self else { return done(nil, false, nil) }
+                let res: BoardPage
+                switch result {
+                case .success(let value): res = value
+                case .failure(let f):
+                    return done(nil, f.error == .rateLimited, f.retryAfter)
+                }
                 if let hit = findLeaderboardEntry(in: res.users, previousLast: nil,
                                                   where: { $0.username == username }) {
                     // If the user sits at index 0 of page 2+, fetch the preceding
                     // page once so the person directly above them is never lost.
                     if hit.above == nil && page > 1 {
-                        self.fetchBoardPage(period: period, page: page - 1) { prev in
-                            done(BoardStanding(rank: hit.item.rank,
-                                               totalUsers: res.totalUsers,
-                                               tokens: hit.item.tokens,
-                                               above: prev?.users.last,
-                                               below: hit.below))
+                        self.fetchBoardPage(period: period, page: page - 1) { prevRes in
+                            switch prevRes {
+                            case .success(let prev):
+                                done(BoardStanding(rank: hit.item.rank,
+                                                   totalUsers: res.totalUsers,
+                                                   tokens: hit.item.tokens,
+                                                   above: prev.users.last,
+                                                   below: hit.below), false, nil)
+                            case .failure(let f):
+                                done(BoardStanding(rank: hit.item.rank,
+                                                   totalUsers: res.totalUsers,
+                                                   tokens: hit.item.tokens,
+                                                   above: nil,
+                                                   below: hit.below),
+                                     f.error == .rateLimited, f.retryAfter)
+                            }
                         }
                         return
                     }
@@ -719,7 +785,7 @@ final class API {
                                               totalUsers: res.totalUsers,
                                               tokens: hit.item.tokens,
                                               above: hit.above,
-                                              below: hit.below))
+                                              below: hit.below), false, nil)
                 }
                 // Rank may have drifted across a page boundary since the profile
                 // snapshot; check the adjacent page before falling back to scan.
@@ -730,30 +796,48 @@ final class API {
                     return nil
                 }()
                 if let adj = nextTry {
-                    self.fetchBoardPage(period: period, page: adj) { adjRes in
-                        if let adjRes,
-                           let hit = findLeaderboardEntry(
-                               in: adjRes.users,
-                               previousLast: adj == page + 1 ? res.users.last : nil,
-                               where: { $0.username == username }) {
-                            if hit.above == nil && adj > 1 {
-                                self.fetchBoardPage(period: period, page: adj - 1) { prev in
-                                    done(BoardStanding(rank: hit.item.rank,
-                                                       totalUsers: adjRes.totalUsers,
-                                                       tokens: hit.item.tokens,
-                                                       above: prev?.users.last,
-                                                       below: hit.below))
-                                }
-                                return
+                    self.fetchBoardPage(period: period, page: adj) { adjResult in
+                        switch adjResult {
+                        case .failure(let f):
+                            if f.error == .rateLimited {
+                                return done(nil, true, f.retryAfter)
                             }
-                            return done(BoardStanding(rank: hit.item.rank,
-                                                      totalUsers: adjRes.totalUsers,
-                                                      tokens: hit.item.tokens,
-                                                      above: hit.above,
-                                                      below: hit.below))
+                            self.walkBoard(period: period, username: username,
+                                           fromPage: 1, previousLast: nil, done: done)
+                        case .success(let adjRes):
+                            if let hit = findLeaderboardEntry(
+                                in: adjRes.users,
+                                previousLast: adj == page + 1 ? res.users.last : nil,
+                                where: { $0.username == username }) {
+                                if hit.above == nil && adj > 1 {
+                                    self.fetchBoardPage(period: period, page: adj - 1) { prevRes in
+                                        switch prevRes {
+                                        case .success(let prev):
+                                            done(BoardStanding(rank: hit.item.rank,
+                                                               totalUsers: adjRes.totalUsers,
+                                                               tokens: hit.item.tokens,
+                                                               above: prev.users.last,
+                                                               below: hit.below), false, nil)
+                                        case .failure(let f):
+                                            done(BoardStanding(rank: hit.item.rank,
+                                                               totalUsers: adjRes.totalUsers,
+                                                               tokens: hit.item.tokens,
+                                                               above: nil,
+                                                               below: hit.below),
+                                                 f.error == .rateLimited, f.retryAfter)
+                                        }
+                                    }
+                                    return
+                                }
+                                return done(BoardStanding(rank: hit.item.rank,
+                                                          totalUsers: adjRes.totalUsers,
+                                                          tokens: hit.item.tokens,
+                                                          above: hit.above,
+                                                          below: hit.below), false, nil)
+                            }
+                            self.walkBoard(period: period, username: username,
+                                           fromPage: 1, previousLast: nil, done: done)
                         }
-                        self.walkBoard(period: period, username: username,
-                                       fromPage: 1, previousLast: nil, done: done)
                     }
                     return
                 }
@@ -767,44 +851,54 @@ final class API {
 
     private func fetchBoardPage(
         period: String, page: Int,
-        _ done: @escaping ((users: [Neighbour], totalUsers: Int, hasNext: Bool)?) -> Void
+        _ done: @escaping (Result<BoardPage, APIFailure>) -> Void
     ) {
         getJSON("/api/leaderboard?period=\(period)&limit=100&page=\(page)") { result in
-            guard case .success(let o) = result else { return done(nil) }
-            let pg = o["pagination"] as? [String: Any]
-            let totalUsers = int(pg, "totalUsers")
-            let hasNext = (pg?["hasNext"] as? Bool) ?? false
-            let users = (o["users"] as? [[String: Any]] ?? []).map {
-                Neighbour(rank: int($0, "rank"),
-                          username: $0["username"] as? String ?? "?",
-                          tokens: int($0, "totalTokens"))
+            switch result {
+            case .failure(let f):
+                done(.failure(f))
+            case .success(let o):
+                let pg = o["pagination"] as? [String: Any]
+                let totalUsers = int(pg, "totalUsers")
+                let hasNext = (pg?["hasNext"] as? Bool) ?? false
+                let users = (o["users"] as? [[String: Any]] ?? []).map {
+                    Neighbour(rank: int($0, "rank"),
+                              username: $0["username"] as? String ?? "?",
+                              tokens: int($0, "totalTokens"))
+                }
+                done(.success((users, totalUsers, hasNext)))
             }
-            done((users, totalUsers, hasNext))
         }
     }
 
     /// Walks leaderboard pages sequentially, passing the previous page's last
     /// entry forward so page-boundary ranks (#101, #201, …) keep `above`.
+    /// Stops immediately on HTTP 429 so we never pile onto a rate limit.
     private func walkBoard(period: String, username: String, fromPage page: Int,
                            previousLast: Neighbour?, maxPages: Int = 6,
-                           done: @escaping (BoardStanding?) -> Void) {
-        fetchBoardPage(period: period, page: page) { [weak self] res in
-            guard let res else { return done(nil) }
+                           done: @escaping (BoardStanding?, Bool, TimeInterval?) -> Void) {
+        fetchBoardPage(period: period, page: page) { [weak self] result in
+            let res: BoardPage
+            switch result {
+            case .success(let value): res = value
+            case .failure(let f):
+                return done(nil, f.error == .rateLimited, f.retryAfter)
+            }
             if let hit = findLeaderboardEntry(in: res.users, previousLast: previousLast,
                                               where: { $0.username == username }) {
                 return done(BoardStanding(rank: hit.item.rank,
                                           totalUsers: res.totalUsers,
                                           tokens: hit.item.tokens,
                                           above: hit.above,
-                                          below: hit.below))
+                                          below: hit.below), false, nil)
             }
             if let self, res.hasNext, page < maxPages {
                 self.walkBoard(period: period, username: username, fromPage: page + 1,
                                previousLast: res.users.last, maxPages: maxPages, done: done)
             } else {
                 // A page cap is incomplete evidence, not proof of being unranked.
-                if res.hasNext { return done(nil) }
-                done(BoardStanding(rank: 0, totalUsers: res.totalUsers, tokens: 0, above: nil))
+                if res.hasNext { return done(nil, false, nil) }
+                done(BoardStanding(rank: 0, totalUsers: res.totalUsers, tokens: 0, above: nil), false, nil)
             }
         }
     }
@@ -1087,6 +1181,8 @@ final class Controller: NSObject, NSMenuDelegate {
     private var cliVersion: String?
     private var cliUpdate: CLIUpdateInfo?
     private var cliServeRunning: Bool?
+    private var cliServeIntervalMinutes: Int?
+    private var hasReadToken = false
     /// Set from the moment the download starts until the app is replaced, so the
     /// menu item cannot start a second install over the top of the first.
     private var installing = false
@@ -1094,6 +1190,8 @@ final class Controller: NSObject, NSMenuDelegate {
     private var lastServerSuccess: Date?
     private var serverLoading = false
     private var serverError: APIReadError?
+    private var rateLimitedUntil: Date?
+    private var rateLimitStreak = 0
     private var localLoading = false
     private var lastLocalAttempt: Date?
     private var lastWeekMonthScan: Date?
@@ -1163,6 +1261,7 @@ final class Controller: NSObject, NSMenuDelegate {
             guard let self else { return }
             DropdownPanel.shared.show(self.panelData, from: self.statusItem.button)
         }
+        refreshReadTokenState()
         render()
 
         refreshLocal(force: true)
@@ -1236,21 +1335,51 @@ final class Controller: NSObject, NSMenuDelegate {
             server = nil
             serverFailed = false
             serverError = nil
+            rateLimitedUntil = nil
+            rateLimitStreak = 0
             lastRank = nil
+            refreshReadTokenState()
             refreshServer()
         }
         if timersChanged { scheduleTimers() }
         render()
     }
 
+    private func refreshReadTokenState() {
+        hasReadToken = ReadTokenStore.load(config) != nil
+    }
+
+    private func applyRateLimitBackoff(retryAfter: TimeInterval?) {
+        rateLimitStreak += 1
+        let delay = rateLimitBackoff(retryAfter: retryAfter, attempt: rateLimitStreak)
+        rateLimitedUntil = Date().addingTimeInterval(delay)
+    }
+
+    private var serverErrorDisplayMessage: String? {
+        guard let error = serverError else { return nil }
+        if error == .rateLimited, let until = rateLimitedUntil, until > Date() {
+            return t("api.rateLimitedUntil", fmtClock(until))
+        }
+        return error.message
+    }
+
     private func refreshCLIInfo() {
         workQueue.async { [weak self] in
             let ver = CLI.version()
-            let serve = CLI.isServeRunning()
+            let status = CLI.serviceStatus()
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.cliVersion = ver
-                self.cliServeRunning = serve
+                self.cliServeRunning = status?.serveRunning
+                self.cliServeIntervalMinutes = status?.intervalMinutes
+                // If credentials.json was absent or login came from an env var,
+                // pick up the authenticated username reported by `tokens status --json`.
+                if self.config.username.isEmpty, let cliUser = status?.username, !cliUser.isEmpty {
+                    self.config.username = cliUser
+                    self.api = API(config: self.config)
+                    self.refreshReadTokenState()
+                    self.refreshServer()
+                }
                 self.render()
                 if let ver {
                     Updates.checkCLI(current: ver) { [weak self] info in
@@ -1265,8 +1394,9 @@ final class Controller: NSObject, NSMenuDelegate {
 
     // MARK: Data
 
-    private func refreshServer() {
+    private func refreshServer(manual: Bool = false) {
         guard !serverLoading else { return }
+        if !manual, let until = rateLimitedUntil, Date() < until { return }
         lastServerAttempt = Date()
         serverLoading = true
         render()
@@ -1276,14 +1406,25 @@ final class Controller: NSObject, NSMenuDelegate {
             switch result {
             case .success(let stats):
                 self.server = stats
-                self.serverFailed = false
-                self.serverError = nil
                 self.lastServerSuccess = Date()
+                if stats.boardRateLimited {
+                    self.applyRateLimitBackoff(retryAfter: stats.boardRetryAfter)
+                    self.serverFailed = true
+                    self.serverError = .rateLimited
+                } else {
+                    self.rateLimitStreak = 0
+                    self.rateLimitedUntil = nil
+                    self.serverFailed = false
+                    self.serverError = nil
+                }
                 self.announceRankMove(stats)
-            case .failure(let error):
+            case .failure(let failure):
                 // Keep the last good server snapshot. An attempt is not success.
                 self.serverFailed = true
-                self.serverError = error
+                self.serverError = failure.error
+                if failure.error == .rateLimited {
+                    self.applyRateLimitBackoff(retryAfter: failure.retryAfter)
+                }
             }
             self.render()
             if let models = self.server?.models {
@@ -1471,7 +1612,8 @@ final class Controller: NSObject, NSMenuDelegate {
         // `--dump notice`, which sets this field by hand.
         data.noticeKind = noticeKind
         data.serverLoading = serverLoading
-        data.serverError = serverError?.message
+        data.serverError = serverErrorDisplayMessage
+        data.serverErrorNeedsToken = serverError == .notFound || serverError == .unauthorized
         data.serverFetchedAt = lastServerSuccess
         data.serverAttemptedAt = lastServerAttempt
         data.loginEnabled = LoginItem.isEnabled
@@ -1481,6 +1623,8 @@ final class Controller: NSObject, NSMenuDelegate {
         data.cliVersion = cliVersion
         data.cliLatestVersion = (cliUpdate?.isNewer == true) ? cliUpdate?.latest : nil
         data.cliServeRunning = cliServeRunning
+        data.cliServeIntervalMinutes = cliServeIntervalMinutes
+        data.hasReadToken = hasReadToken
         return data
     }
 
@@ -1656,7 +1800,9 @@ final class Controller: NSObject, NSMenuDelegate {
         for line in presenter.lines {
             if let it = item(line) { menu.addItem(it) }
         }
-        if let error = serverError { menu.addItem(disabledItem(error.message, font: rowFont, dim: true)) }
+        if let errorMsg = serverErrorDisplayMessage {
+            menu.addItem(disabledItem(errorMsg, font: rowFont, dim: true))
+        }
         if let fetched = lastServerSuccess {
             menu.addItem(disabledItem(t("stamp.fetched", fmtClock(fetched)), font: rowFont, dim: true))
         }
@@ -1675,6 +1821,12 @@ final class Controller: NSObject, NSMenuDelegate {
         return it
     }
 
+    @objc private func openTokenSettings() {
+        let base = config.apiBase.hasSuffix("/") ? String(config.apiBase.dropLast()) : config.apiBase
+        guard let url = URL(string: base + "/settings") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     @objc private func editReadToken() {
         DropdownPanel.shared.close()
         guard readTokenAccount(apiBase: config.apiBase, username: config.username) != nil else {
@@ -1686,10 +1838,22 @@ final class Controller: NSObject, NSMenuDelegate {
         let alert = NSAlert()
         alert.messageText = t("action.readToken")
         alert.informativeText = t("token.explain", config.username, config.apiBase)
-        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 24))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 52))
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 28, width: 340, height: 24))
         field.placeholderString = t("token.placeholder")
         field.setAccessibilityLabel(t("action.readToken"))
-        alert.accessoryView = field
+        let settingsBtn = NSButton(title: t("token.openSettings"), target: self,
+                                   action: #selector(openTokenSettings))
+        settingsBtn.bezelStyle = .inline
+        settingsBtn.isBordered = false
+        settingsBtn.font = NSFont.systemFont(ofSize: 11.5, weight: .medium)
+        settingsBtn.contentTintColor = tokensAccentInk
+        settingsBtn.alignment = .left
+        settingsBtn.sizeToFit()
+        settingsBtn.frame = NSRect(x: 0, y: 2, width: min(340, settingsBtn.frame.width + 6), height: 20)
+        container.addSubview(field)
+        container.addSubview(settingsBtn)
+        alert.accessoryView = container
         alert.addButton(withTitle: t("token.save"))
         alert.addButton(withTitle: t("token.cancel"))
         alert.addButton(withTitle: t("token.remove"))
@@ -1709,6 +1873,14 @@ final class Controller: NSObject, NSMenuDelegate {
             invalid.runModal()
             return
         }
+        if !removing && !looksLikeReadToken(token) {
+            let confirm = NSAlert()
+            confirm.messageText = t("token.prefixTitle")
+            confirm.informativeText = t("token.prefixBody")
+            confirm.addButton(withTitle: t("token.saveAnyway"))
+            confirm.addButton(withTitle: t("token.cancel"))
+            guard confirm.runModal() == .alertFirstButtonReturn else { return }
+        }
         // The token itself is
         // never echoed, logged, passed to a shell, or written to UserDefaults.
         let status = ReadTokenStore.save(removing ? nil : token, config: config)
@@ -1718,7 +1890,10 @@ final class Controller: NSObject, NSMenuDelegate {
             failure.runModal()
             return
         }
-        refreshServer()
+        refreshReadTokenState()
+        rateLimitedUntil = nil
+        rateLimitStreak = 0
+        refreshServer(manual: true)
     }
 
     private func addActions() {
@@ -1730,8 +1905,8 @@ final class Controller: NSObject, NSMenuDelegate {
         menu.addItem(actionItem(t("action.refresh"), symbol: "arrow.clockwise",
                                 action: #selector(refreshAll), key: "r"))
 
-        menu.addItem(actionItem(t("action.readToken"), symbol: "key",
-                                action: #selector(editReadToken)))
+        menu.addItem(actionItem(hasReadToken ? t("action.readTokenConfigured") : t("action.readToken"),
+                                symbol: "key", action: #selector(editReadToken)))
         let budgetTitle = config.dailyCostBudget > 0
             ? t("action.budgetWith", fmtMoney(config.dailyCostBudget))
             : t("action.budget") + " · " + t("budget.off")
@@ -1871,7 +2046,7 @@ final class Controller: NSObject, NSMenuDelegate {
         CLI.invalidateBinaryCache()
         reloadConfigIfChanged()
         refreshLocal(force: true)
-        refreshServer()
+        refreshServer(manual: true)
         refreshCLIInfo()
     }
 

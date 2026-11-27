@@ -88,7 +88,8 @@ final class PanelMenuView: NSView {
                            enabled: data.canSubmit && !data.busy))
         out.append(MenuRow(symbol: "arrow.clockwise", title: t("action.refresh"),
                            kind: .action(.refresh), hint: t("hint.refresh")))
-        out.append(MenuRow(symbol: "key", title: t("action.readToken"),
+        out.append(MenuRow(symbol: "key",
+                           title: data.hasReadToken ? t("action.readTokenConfigured") : t("action.readToken"),
                            kind: .action(.readToken), hint: t("token.hint")))
         out.append(MenuRow())
         out.append(MenuRow(symbol: "list.number", title: t("action.rankMode"),
@@ -297,8 +298,13 @@ final class PanelMenuView: NSView {
         let versionLine: String
         if let cliVer = data.cliVersion, !cliVer.isEmpty {
             if let serve = data.cliServeRunning {
-                versionLine = t("menu.versionCLIServe", Updates.currentVersion, cliVer,
-                                t(serve ? "cli.serveOn" : "cli.serveOff"))
+                let serveLabel: String
+                if serve, let mins = data.cliServeIntervalMinutes, mins > 0 {
+                    serveLabel = t("cli.serveOnInterval", mins)
+                } else {
+                    serveLabel = t(serve ? "cli.serveOn" : "cli.serveOff")
+                }
+                versionLine = t("menu.versionCLIServe", Updates.currentVersion, cliVer, serveLabel)
             } else {
                 versionLine = t("menu.versionCLI", Updates.currentVersion, cliVer)
             }

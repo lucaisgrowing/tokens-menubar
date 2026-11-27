@@ -23,16 +23,13 @@
 
 Plain Swift, compiled with `swiftc`. No Xcode project, no dependencies beyond system frameworks.
 
-## What's new in 1.12.0
+## What's new in 1.12.1
 
-- **Redesigned UI & macOS AppIcon**: Elevated light/dark card hierarchy, proportional model bars, macOS Settings-style grouped Actions & Settings page, and a new text-free deep obsidian-teal AppIcon.
-- **Live Mini-Leaderboard Ladder**: 3-row race around your rank (rival above, you highlighted, rival below) with percentile badge (`Top XX%`) and 1-click Today / All-time switching.
-- **Animated 7-Day Pace Bar**: Smooth ease-out glide and one-shot highlight sweep on the Today / 7-day average bar (respects Reduce Motion).
-- **In-App Settings & Hot-Reload**: Toggle menu-bar items (`Tokens` / `Cost` / `Rank`) and set your daily USD budget directly from the panel, with live hot-reload for `config.json` and `tokens login`.
-- **Streak, Cache Hit Rate & CLI Checks**: Shows UTC active-day streaks, prompt cache-hit ratio, local `tokens` CLI version / `tokens serve` status, and upstream CLI update alerts.
-- **Reliability & Security**: Fixes `#101`/`#201` page-boundary lookups and the 600-user cap, adds wake & network-recovery refreshes, throttles local CLI scans, verifies `SHA256SUMS.txt` in the updater, and expands offline regression checks to 101 assertions.
+- **Polite API Polling & 429 Backoff**: Skips unnecessary `/api/leaderboard` pagination for private accounts (`user.isPrivate`), unranked profiles, and days with zero submissions; honors HTTP `429` `Retry-After` headers with exponential cooldown.
+- **Structured `tokens status --json` & Private-Account UX**: Uses `tokens status --json` to read `tokens serve` state and sync interval, shows configured read-token status in settings, makes 404/401 hints clickable straight to the Keychain token dialog, and adds a direct link to tokens.ci Settings.
+- **1.12.0 Highlights**: Elevated light/dark card UI, text-free deep obsidian-teal AppIcon, 3-row live Mini-Leaderboard Ladder, animated 7-day pace bar, in-app menu-bar & budget settings with hot-reload, UTC streaks, prompt cache-hit badge, and SHA-256 verified in-place updates.
 
-[Download v1.12.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.0) · [Full changelog](CHANGELOG.md)
+[Download v1.12.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.1) · [Full changelog](CHANGELOG.md)
 
 The README images below are 2× native AppKit offscreen renders of **TokensBar 1.12.0** on macOS, using synthetic `demo-user` API/CLI data—not a real account or Linux mockup. The diagnostic renderer uses a fixed backing surface in place of the live popover material. English and Chinese images are rendered separately. [Reproduction and verification](docs/SCREENSHOTS.md).
 
@@ -168,7 +165,7 @@ For private accounts, create a **read token** in tokens.ci Settings, then choose
 
 ### Offline checks
 
-Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.12.0 macOS release workflow passed those 101 checks plus 10 native light/dark accent and contrast checks with a blue system preference, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
+Run `Tests/run.sh` with Swift installed. This tests the actual Foundation parser/formatting/error helpers; it needs neither a CLI login nor a live API. The v1.12.1 macOS release workflow passes those 126 checks plus 10 native light/dark accent and contrast checks with a blue system preference, universal AppKit/Security compilation, bundle metadata checks and ad-hoc signature verification. The separate README snapshot workflow renders the published binary on macOS with synthetic local data. Neither replaces interactive UI, Keychain, private-account or real-CLI testing; those checks remain manual. Use `./build.sh --universal` and `--panel-probe` when checking changes on a Mac.
 
 ## Configuration
 

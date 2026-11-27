@@ -98,6 +98,10 @@ struct PanelData {
     var cliVersion: String?
     var cliLatestVersion: String?
     var cliServeRunning: Bool?
+    var cliServeIntervalMinutes: Int?
+    var isPrivateAccount = false
+    var hasReadToken = false
+    var serverErrorNeedsToken = false
     /// The board the menu bar shows, and the other one.
     var primaryMode: RankMode = .today
     var primary: BoardStanding?
@@ -147,6 +151,7 @@ extension PanelData {
          serverFailed: Bool, busy: Bool, transient: String?) {
         self.init()
         username = config.username
+        isPrivateAccount = server?.isPrivate ?? false
         primaryMode = rankMode
         primary = server?.standing(rankMode)
         secondary = server?.standing(rankMode == .today ? .allTime : .today)
@@ -790,6 +795,9 @@ final class PanelView: NSView {
         if !l.modelRows.isEmpty {
             add(l.modelsCard, .chart(.today), grow: false)
         }
+        if data.serverErrorNeedsToken {
+            add(l.hint, .readToken, grow: true)
+        }
         if data.canSubmit && !data.busy { add(l.submit, .submit, grow: false) }
         return out
     }
@@ -858,6 +866,7 @@ final class PanelView: NSView {
         case .chart(let scope):
             return scope == .today ? t("hint.chartToday") : t("hint.chartLifetime")
         case .setRank: return t("hint.switchBoard")
+        case .readToken: return t("hint.fixReadToken")
         case .submit: return t("hint.submit")
         default: return t("panel.hint")
         }
@@ -1116,7 +1125,9 @@ final class PanelView: NSView {
         let entries = leaderboardLadderEntries()
         guard !entries.isEmpty else {
             let msg: String
-            if let st, st.rank == 0 {
+            if data.isPrivateAccount {
+                msg = t("panel.privateBoard")
+            } else if let st, st.rank == 0 {
                 msg = t("panel.notSubmitted")
             } else {
                 msg = t(data.hasServer ? "panel.rankUnknown" : "panel.waitingServer")
@@ -1486,9 +1497,28 @@ final class PanelView: NSView {
 
     private func drawFooter(_ l: PanelLayout, accent: NSColor) {
         let hovering = hoveredHit.map { hits.indices.contains($0) } ?? false
-        text(hintText, in: l.hint, font: smallFont,
-             colour: hovering ? .labelColor
-                : data.serverFailed ? .systemOrange : .secondaryLabelColor, wrap: false)
+        let hoveredAction = hoveredHit.flatMap { hits.indices.contains($0) ? hits[$0].1 : nil }
+        if data.serverErrorNeedsToken && (!hovering || hoveredAction == .readToken) {
+            let isHov = hoveredAction == .readToken
+            let pill = l.hint.insetBy(dx: -4, dy: -2)
+            fill(pill, radius: 6,
+                 colour: NSColor.systemOrange.withAlphaComponent(isHov ? 0.18 : 0.11))
+            stroke(pill, radius: 6,
+                   colour: NSColor.systemOrange.withAlphaComponent(isHov ? 0.45 : 0.28), width: 0.75)
+            icon("key.fill",
+                 in: NSRect(x: pill.minX + 6, y: pill.midY - 5.5, width: 11, height: 11),
+                 size: 9.5, colour: .systemOrange)
+            text(hintText,
+                 in: NSRect(x: pill.minX + 21, y: pill.midY - 7, width: pill.width - 36, height: 14),
+                 font: smallFont, colour: isHov ? .labelColor : .systemOrange, wrap: false)
+            icon("chevron.right",
+                 in: NSRect(x: pill.maxX - 13, y: pill.midY - 5.5, width: 8, height: 11),
+                 size: 8, colour: .systemOrange)
+        } else {
+            text(hintText, in: l.hint, font: smallFont,
+                 colour: hovering ? .labelColor
+                    : data.serverFailed ? .systemOrange : .secondaryLabelColor, wrap: false)
+        }
 
         if hasNotice {
             drawNotice(l)

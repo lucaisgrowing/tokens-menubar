@@ -103,6 +103,55 @@ expect(CLIVersionParser.parse("tokens 27.4.1\n") == "27.4.1", "parse tokens --ve
 expect(CLIVersionParser.parse("invalid output") == nil, "reject non-version")
 expect(CLIServiceStatusParser.isServeRunning("  Service: tokens serve running (pid 792)\n"), "detect running serve")
 expect(!CLIServiceStatusParser.isServeRunning("  Service: stopped\n"), "detect stopped serve")
+let statusJSON = """
+{
+  "apiUrl": "https://tokens.ci",
+  "auth": { "loggedIn": true, "username": "alice" },
+  "service": { "serveRunning": true, "intervalMinutes": 30 }
+}
+""".data(using: .utf8)!
+let parsedStatus = CLIServiceStatusParser.parseJSON(statusJSON)
+expect(parsedStatus == CLIServiceStatus(serveRunning: true, intervalMinutes: 30, username: "alice", apiURL: "https://tokens.ci"), "parse tokens status --json")
+let loggedOutJSON = """
+{
+  "apiUrl": "https://tokens.ci",
+  "auth": { "loggedIn": false, "username": "alice" },
+  "service": { "serveRunning": false, "intervalMinutes": 0 }
+}
+""".data(using: .utf8)!
+let parsedLoggedOut = CLIServiceStatusParser.parseJSON(loggedOutJSON)
+expect(parsedLoggedOut?.serveRunning == false && parsedLoggedOut?.intervalMinutes == nil && parsedLoggedOut?.username == nil, "ignore logged-out username and zero interval")
+expect(CLIServiceStatusParser.parseJSON("not json".data(using: .utf8)!) == nil, "reject malformed status json")
+
+// Retry-After & 429 rate-limit backoff.
+let refDate = Date(timeIntervalSince1970: 1_795_770_000) // Fri, 27 Nov 2026 09:00:00 GMT
+expect(parseRetryAfter("120", now: refDate) == 120, "numeric Retry-After")
+expect(parseRetryAfter("  45  ", now: refDate) == 45, "trimmed Retry-After")
+expect(parseRetryAfter("99999", now: refDate) == 3600, "Retry-After capped at 1h")
+expect(parseRetryAfter("0", now: refDate) == nil, "non-positive Retry-After ignored")
+expect(parseRetryAfter("garbage", now: refDate) == nil, "invalid Retry-After ignored")
+let futureHTTPDate = "Fri, 27 Nov 2026 09:02:30 GMT"
+expect(abs((parseRetryAfter(futureHTTPDate, now: refDate) ?? 0) - 150) < 1, "HTTP-date Retry-After")
+expect(parseRetryAfter("Fri, 27 Nov 2026 08:59:00 GMT", now: refDate) == nil, "past HTTP-date ignored")
+expect(rateLimitBackoff(retryAfter: 90, attempt: 1) == 90, "server Retry-After honored")
+expect(rateLimitBackoff(retryAfter: 5, attempt: 1) == 10, "tiny Retry-After floored to 10s")
+expect(rateLimitBackoff(retryAfter: nil, attempt: 1) == 60, "backoff step 1 = 60s")
+expect(rateLimitBackoff(retryAfter: nil, attempt: 2) == 120, "backoff step 2 = 120s")
+expect(rateLimitBackoff(retryAfter: nil, attempt: 3) == 240, "backoff step 3 = 240s")
+expect(rateLimitBackoff(retryAfter: nil, attempt: 6) == 600, "backoff capped at 10m")
+
+// Leaderboard scan gating (avoid wasteful multi-page scans).
+expect(!shouldScanLeaderboard(isPrivateAccount: true, profileRank: 10, hasTodayUsage: true, period: "all"), "skip all-time scan for private profile")
+expect(!shouldScanLeaderboard(isPrivateAccount: true, profileRank: 10, hasTodayUsage: true, period: "today"), "skip today scan for private profile")
+expect(!shouldScanLeaderboard(isPrivateAccount: false, profileRank: 0, hasTodayUsage: true, period: "all"), "skip all-time scan when unranked")
+expect(shouldScanLeaderboard(isPrivateAccount: false, profileRank: 87, hasTodayUsage: false, period: "all"), "scan all-time when ranked")
+expect(!shouldScanLeaderboard(isPrivateAccount: false, profileRank: 87, hasTodayUsage: false, period: "today"), "skip today scan when no submission today")
+expect(shouldScanLeaderboard(isPrivateAccount: false, profileRank: 87, hasTodayUsage: true, period: "today"), "scan today when submitted today")
+
+// Read token prefix helper.
+expect(looksLikeReadToken("tkr_abc123"), "valid tkr_ prefix")
+expect(!looksLikeReadToken("tkr_"), "bare prefix rejected")
+expect(!looksLikeReadToken("ghp_12345"), "other prefix flagged")
 
 // SHA256SUMS.txt parser.
 let sampleHash = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"

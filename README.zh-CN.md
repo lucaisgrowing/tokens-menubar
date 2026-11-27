@@ -23,16 +23,13 @@
 
 Swift 编写，`swiftc` 直接编译，不需要 Xcode 工程，除了系统框架没有任何依赖。
 
-## 1.12.0 更新了什么
+## 1.12.1 更新了什么
 
-- **全新界面与 macOS 图标**：升级浅深色立体卡片层级、今日模型比例底条、系统设置风格分组操作页，以及全新无文字深青玻璃质感 AppIcon。
-- **3 人实时梯队排行榜**：展示「上一名 / 你（青绿高亮）/ 下一名」实时追赶格局，附带 `前 XX%` 百分位徽章与一键切榜。
-- **均值进度条动效**：「今日 / 7 日均值」进度条新增顺滑展开与高光扫掠动效（完整适配「减弱动态效果」）。
-- **可视化设置与配置热重载**：操作页直接开关菜单栏显示项（Token / 费用 / 排名）并配置每日预算，自动监听 `config.json` 与 `tokens login` 变更即时生效。
-- **连胜、缓存命中率与 CLI 检测**：新增 UTC 连续活跃天数（Streak）、提示词缓存命中率、本机 `tokens` CLI 新版检测与 `tokens serve` 状态提示。
-- **可靠性与更新校验**：修复 `#101`/`#201` 跨页边界与 600 名上限、增加休眠唤醒与断网重连刷新、本地扫描节流、就地更新新增 `SHA256SUMS.txt` 与 Bundle ID 校验，纯 Swift 回归检查扩充至 101 项。
+- **更克制的 API 轮询与 429 限流退避**：解析 `user.isPrivate` 并跳过私密账号、总榜未上榜及今日未提交时的无效 `/api/leaderboard` 翻页；完整支持 HTTP `429` `Retry-After` 与指数退避冷却。
+- **结构化 `tokens status --json` 与私密账号体验优化**：改用 `tokens status --json` 读取 `tokens serve` 状态与同步周期；设置页展示读取令牌配置状态，主面板 404/401 错误提示支持一键点击弹出钥匙串输入框并内置直达 tokens.ci 设置链接。
+- **1.12.0 界面重制亮点**：浅深色立体卡片层级、无文字深青 AppIcon、3 人实时梯队排行榜、均值进度条动效、可视化菜单栏与预算设置、配置热重载、UTC 连胜与提示词缓存命中率、就地更新 SHA-256 校验。
 
-[下载 v1.12.0](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.0) · [完整更新日志](CHANGELOG.md)
+[下载 v1.12.1](https://github.com/lucaisgrowing/tokens-menubar/releases/tag/v1.12.1) · [完整更新日志](CHANGELOG.md)
 
 下方图片由 **1.12.0** 源码构建的 App 在 macOS 上通过原生 AppKit 以 2× 像素密度离屏渲染生成，使用虚构的 `demo-user` API／CLI 示例数据，不是真实账号用量，也不是 Linux 近似图。诊断渲染器使用固定底色代替运行时弹层材质，中英文图片分别渲染。[复现方法与验证记录](docs/SCREENSHOTS.md)。
 
@@ -157,7 +154,7 @@ app 是 `LSUIElement`，只在菜单栏出现，没有 Dock 图标和窗口。
 
 ### 离线检查
 
-安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.12.0 的 macOS 发布流程已通过这 101 项检查、10 项原生浅深色强调色／对比度检查（系统强调色设为蓝色）、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
+安装 Swift 后运行 `Tests/run.sh`，测试应用实际使用的 Foundation 解析器、格式化及错误分类，无需 CLI 登录或在线 API。1.12.1 的 macOS 发布流程通过这 126 项检查、10 项原生浅深色强调色／对比度检查（系统强调色设为蓝色）、AppKit／Security 双架构完整编译、包信息与 ad-hoc 签名验证；独立的 README 截图流程会在 macOS 上用已发布二进制和虚构本地数据渲染界面。这些不能代替界面交互、钥匙串、私密账号或真实 CLI 验收，后者仍需人工检查。修改后可在 Mac 上运行 `./build.sh --universal` 和 `--panel-probe`。
 
 ## 配置
 
